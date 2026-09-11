@@ -21,46 +21,49 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <style>
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            .thermal-receipt, .thermal-receipt * {
-                visibility: visible;
-            }
-            .thermal-receipt {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 58mm;
-                padding: 2mm 1mm;
-                margin: 0;
-                font-family: 'Courier New', Courier, monospace;
-                font-size: 9px;
-                line-height: 1.2;
-                color: #000;
-                background: #fff;
-            }
-            .no-print {
-                display: none !important;
-            }
+    @media print {
+        /* Sembunyikan seluruh tampilan aplikasi saat cetak */
+        body * {
+            visibility: hidden !important;
         }
-        
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        /* Tampilkan khusus area struk thermal */
+        .thermal-receipt, .thermal-receipt * {
+            visibility: visible !important;
         }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
+        .thermal-receipt {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 58mm !important;
+            padding: 2mm 1mm !important;
+            margin: 0 !important;
+            font-family: 'Courier New', Courier, monospace !important;
+            font-size: 9px !important;
+            line-height: 1.2 !important;
+            color: #000 !important;
+            background: #fff !important;
+            display: block !important;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
+        .no-print {
+            display: none !important;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-    </style>
+    }
+    
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+</style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased font-sans min-h-screen">
     <div id="root"></div>
@@ -1443,146 +1446,150 @@
         }
 
         function ReceiptModal({ transaction, settings, onTriggerPrint, onClose }) {
-            return (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 no-print relative">
-                        <div className="text-center space-y-1 border-b pb-4 border-dashed border-slate-200">
-                            {settings.storeLogo ? (
-                                <img src={settings.storeLogo} alt="Logo Bengkel" className="h-12 max-w-[120px] object-contain mx-auto mb-2 filter contrast-125 grayscale" />
-                            ) : (
-                                <div className="w-10 h-10 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-lg mb-2">
-                                    <i className="fa-solid fa-wrench"></i>
-                                </div>
-                            )}
-                            <h2 className="font-bold text-lg text-slate-900 uppercase">{settings.storeName}</h2>
-                            <p className="text-xs text-slate-500">{settings.storeAddress}</p>
-                            <p className="text-[11px] text-slate-400">Telp: {settings.storePhone}</p>
-                            <p className="text-[11px] text-slate-400 font-mono mt-1">{transaction.id} | {new Date(transaction.date).toLocaleString('id-ID')}</p>
-                        </div>
+    return (
+        <div>
+            {/* Modal Layar UI */}
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 relative">
+                    <div className="text-center space-y-1 border-b pb-4 border-dashed border-slate-200">
+                        {settings.storeLogo ? (
+                            <img src={settings.storeLogo} alt="Logo Bengkel" className="h-12 max-w-[120px] object-contain mx-auto mb-2 filter contrast-125 grayscale" />
+                        ) : (
+                            <div className="w-10 h-10 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-lg mb-2">
+                                <i className="fa-solid fa-wrench"></i>
+                            </div>
+                        )}
+                        <h2 className="font-bold text-lg text-slate-900 uppercase">{settings.storeName}</h2>
+                        <p className="text-xs text-slate-500">{settings.storeAddress}</p>
+                        <p className="text-[11px] text-slate-400">Telp: {settings.storePhone}</p>
+                        <p className="text-[11px] text-slate-400 font-mono mt-1">{transaction.id} | {new Date(transaction.date).toLocaleString('id-ID')}</p>
+                    </div>
 
-                        <div className="text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono">
-                            <div className="flex justify-between">
-                                <span className="text-slate-400">Pelanggan:</span>
-                                <span className="font-bold text-slate-800">{transaction.customerName}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-400">Kendaraan/Plat:</span>
-                                <span className="font-bold text-slate-800">{transaction.vehicleInfo} ({transaction.plateNumber})</span>
-                            </div>
+                    <div className="text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono">
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">Pelanggan:</span>
+                            <span className="font-bold text-slate-800">{transaction.customerName}</span>
                         </div>
-
-                        <div className="space-y-2 text-xs font-mono max-h-40 overflow-y-auto">
-                            {transaction.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between border-b pb-1 border-slate-100">
-                                    <div>
-                                        <p className="font-bold text-slate-800">{item.name}</p>
-                                        <p className="text-[10px] text-slate-400">{item.qty} x {formatRupiah(item.sellPrice)}</p>
-                                    </div>
-                                    <span className="font-bold text-slate-800">{formatRupiah(item.qty * item.sellPrice)}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="border-t pt-2 border-dashed border-slate-200 text-xs font-mono space-y-1">
-                            <div className="flex justify-between font-bold text-slate-800">
-                                <span>TOTAL</span>
-                                <span>{formatRupiah(transaction.total)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-500">
-                                <span>Bayar ({transaction.paymentMethod})</span>
-                                <span>{formatRupiah(transaction.cashPaid)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-500">
-                                <span>Kembali</span>
-                                <span>{formatRupiah(transaction.change)}</span>
-                            </div>
-                        </div>
-
-                        <div className="flex space-x-2 pt-2">
-                            <button
-                                onClick={onClose}
-                                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-                            >
-                                Tutup
-                            </button>
-                            <button
-                                onClick={onTriggerPrint}
-                                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition flex items-center justify-center space-x-1.5"
-                            >
-                                <i className="fa-solid fa-print"></i>
-                                <span>Cetak Struk</span>
-                            </button>
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">Kendaraan/Plat:</span>
+                            <span className="font-bold text-slate-800">{transaction.vehicleInfo} ({transaction.plateNumber})</span>
                         </div>
                     </div>
 
-                    <div className="hidden print-only thermal-receipt">
-                        <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                            {settings.storeLogo && (
-                                <img
-                                    src={settings.storeLogo}
-                                    style={{ maxWidth: '35mm', maxHeight: '14mm', margin: '0 auto 4px auto', display: 'block', filter: 'grayscale(100%) contrast(200%)' }}
-                                />
-                            )}
-                            <strong style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>{settings.storeName}</strong>
-                            <span style={{ fontSize: '8px', display: 'block' }}>{settings.storeAddress}</span>
-                            <span style={{ fontSize: '8px', display: 'block' }}>Telp: {settings.storePhone}</span>
-                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
-                        </div>
-
-                        <div style={{ fontSize: '8px', marginBottom: '4px' }}>
-                            <div>No: {transaction.id}</div>
-                            <div>Tgl: {new Date(transaction.date).toLocaleString('id-ID')}</div>
-                            <div>Pelanggan: {transaction.customerName}</div>
-                            <div>Plat/Motor: {transaction.plateNumber} / {transaction.vehicleInfo}</div>
-                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
-                        </div>
-
-                        <div style={{ fontSize: '8px', marginBottom: '4px' }}>
-                            {transaction.items.map((item, i) => (
-                                <div key={i} style={{ marginBottom: '2px' }}>
-                                    <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <span>{item.qty} x {formatRupiah(item.sellPrice)}</span>
-                                        <span>{formatRupiah(item.qty * item.sellPrice)}</span>
-                                    </div>
+                    <div className="space-y-2 text-xs font-mono max-h-40 overflow-y-auto">
+                        {transaction.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between border-b pb-1 border-slate-100">
+                                <div>
+                                    <p className="font-bold text-slate-800">{item.name}</p>
+                                    <p className="text-[10px] text-slate-400">{item.qty} x {formatRupiah(item.sellPrice)}</p>
                                 </div>
-                            ))}
-                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
-                        </div>
+                                <span className="font-bold text-slate-800">{formatRupiah(item.qty * item.sellPrice)}</span>
+                            </div>
+                        ))}
+                    </div>
 
-                        <div style={{ fontSize: '8px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Subtotal:</span>
-                                <span>{formatRupiah(transaction.subtotal)}</span>
-                            </div>
-                            {transaction.discount > 0 && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Diskon:</span>
-                                    <span>-{formatRupiah(transaction.discount)}</span>
-                                </div>
-                            )}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '10px', marginTop: '2px' }}>
-                                <span>TOTAL:</span>
-                                <span>{formatRupiah(transaction.total)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Bayar:</span>
-                                <span>{formatRupiah(transaction.cashPaid)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Kembali:</span>
-                                <span>{formatRupiah(transaction.change)}</span>
-                            </div>
-                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                    <div className="border-t pt-2 border-dashed border-slate-200 text-xs font-mono space-y-1">
+                        <div className="flex justify-between font-bold text-slate-800">
+                            <span>TOTAL</span>
+                            <span>{formatRupiah(transaction.total)}</span>
                         </div>
+                        <div className="flex justify-between text-slate-500">
+                            <span>Bayar ({transaction.paymentMethod})</span>
+                            <span>{formatRupiah(transaction.cashPaid)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-500">
+                            <span>Kembali</span>
+                            <span>{formatRupiah(transaction.change)}</span>
+                        </div>
+                    </div>
 
-                        <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '4px', whitespace: 'pre-line' }}>
-                            {settings.receiptFooter}
-                        </div>
+                    <div className="flex space-x-2 pt-2">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                        >
+                            Tutup
+                        </button>
+                        <button
+                            onClick={onTriggerPrint}
+                            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition flex items-center justify-center space-x-1.5"
+                        >
+                            <i className="fa-solid fa-print"></i>
+                            <span>Cetak Struk</span>
+                        </button>
                     </div>
                 </div>
-            );
-        }
+            </div>
+
+            {/* Template Khusus Kertas Printer Thermal (Hanya Muncul Saat Print) */}
+            <div className="thermal-receipt">
+                <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+                    {settings.storeLogo && (
+                        <img
+                            src={settings.storeLogo}
+                            style={{ maxWidth: '35mm', maxHeight: '14mm', margin: '0 auto 4px auto', display: 'block', filter: 'grayscale(100%) contrast(200%)' }}
+                        />
+                    )}
+                    <strong style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>{settings.storeName}</strong>
+                    <span style={{ fontSize: '8px', display: 'block' }}>{settings.storeAddress}</span>
+                    <span style={{ fontSize: '8px', display: 'block' }}>Telp: {settings.storePhone}</span>
+                    <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                </div>
+
+                <div style={{ fontSize: '8px', marginBottom: '4px' }}>
+                    <div>No: {transaction.id}</div>
+                    <div>Tgl: {new Date(transaction.date).toLocaleString('id-ID')}</div>
+                    <div>Pelanggan: {transaction.customerName}</div>
+                    <div>Plat/Motor: {transaction.plateNumber} / {transaction.vehicleInfo}</div>
+                    <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                </div>
+
+                <div style={{ fontSize: '8px', marginBottom: '4px' }}>
+                    {transaction.items.map((item, i) => (
+                        <div key={i} style={{ marginBottom: '2px' }}>
+                            <div style={{ fontWeight: 'bold' }}>{item.name}</div>
+                            <div style={{ display: 'flex', fontStyle: 'normal', justify: 'space-between' }}>
+                                <span>{item.qty} x {formatRupiah(item.sellPrice)}</span>
+                                <span style={{ float: 'right' }}>{formatRupiah(item.qty * item.sellPrice)}</span>
+                            </div>
+                        </div>
+                    ))}
+                    <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                </div>
+
+                <div style={{ fontSize: '8px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', justify: 'space-between' }}>
+                        <span>Subtotal:</span>
+                        <span>{formatRupiah(transaction.subtotal)}</span>
+                    </div>
+                    {transaction.discount > 0 && (
+                        <div style={{ display: 'flex', justify: 'space-between' }}>
+                            <span>Diskon:</span>
+                            <span>-{formatRupiah(transaction.discount)}</span>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', justify: 'space-between', fontWeight: 'bold', fontSize: '10px', marginTop: '2px' }}>
+                        <span>TOTAL:</span>
+                        <span>{formatRupiah(transaction.total)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justify: 'space-between' }}>
+                        <span>Bayar:</span>
+                        <span>{formatRupiah(transaction.cashPaid)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justify: 'space-between' }}>
+                        <span>Kembali:</span>
+                        <span>{formatRupiah(transaction.change)}</span>
+                    </div>
+                    <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                </div>
+
+                <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '4px', whitespace: 'pre-line' }}>
+                    {settings.receiptFooter}
+                </div>
+            </div>
+        </div>
+    );
+}
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
