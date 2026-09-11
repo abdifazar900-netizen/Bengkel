@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BengkelPOS - Cloud Edition</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Compiler -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .thermal-receipt, .thermal-receipt * {
+                visibility: visible;
+            }
+            .thermal-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 58mm;
+                padding: 2mm 1mm;
+                margin: 0;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 9px;
+                line-height: 1.2;
+                color: #000;
+                background: #fff;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const DEFAULT_PRINTER_SETTINGS = {
+            printMethod: 'system',
+            paperWidth: '58mm',
+            autoPrint: true,
+            storeName: 'BENGKEL PRO MOTOR',
+            storeAddress: 'Jl. Raya Utama No. 88, Jakarta',
+            storePhone: '0812-3456-7890',
+            receiptFooter: 'Terima kasih atas kunjungan Anda!\nSimpan struk ini sebagai bukti servis.',
+            storeLogo: null
+        };
+
+        const formatRupiah = (number) => {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number || 0);
+        };
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('pos');
+            const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('bengkel_api_url') || '');
+            const [loading, setLoading] = useState(false);
+            const [syncing, setSyncing] = useState(false);
+
+            const [products, setProducts] = useState([]);
+            const [transactions, setTransactions] = useState([]);
+            const [printerSettings, setPrinterSettings] = useState(DEFAULT_PRINTER_SETTINGS);
+
+            const [btDevice, setBtDevice] = useState(null);
+            const [btStatus, setBtStatus] = useState('Disconnected');
+
+            const [cart, setCart] = useState([]);
+            const [customerName, setCustomerName] = useState('');
+            const [vehicleInfo, setVehicleInfo] = useState('');
+            const [plateNumber, setPlateNumber] = useState('');
+            const [paymentMethod, setPaymentMethod] = useState('cash');
+            const [cashAmount, setCashAmount] = useState('');
+            const [discount, setDiscount] = useState(0);
+
+            const [lastTransaction, setLastTransaction] = useState(null);
+            const [showReceiptModal, setShowReceiptModal] = useState(false);
+            const [showAddProductModal, setShowAddProductModal] = useState(false);
+            const [editingProduct, setEditingProduct] = useState(null);
+
+            const [toast, setToast] = useState(null);
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            const callApi = async (action, payload = {}) => {
+                if (!apiUrl) return null;
+                setSyncing(true);
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({ action, payload })
+                    });
+                    const res = await response.json();
+                    setSyncing(false);
+                    if (res.status === 'success') {
+                        return res.data;
+                    } else {
+                        showToast(res.message || 'Gagal memproses ke database cloud', 'error');
+                        return null;
+                    }
+                } catch (err) {
+                    console.error('API Error:', err);
+                    setSyncing(false);
+                    showToast('Koneksi ke Google Sheets gagal! Periksa URL Web App.', 'error');
+                    return null;
+                }
+            };
+
+            /* Load initial data on startup or API URL change */
+            const loadCloudData = async () => {
+                if (!apiUrl) return;
+                setLoading(true);
+                try {
+                    const response = await fetch(`${apiUrl}?action=getAllData`);
+                    const res = await response.json();
+                    if (res.status === 'success') {
+                        if (res.data.products) setProducts(res.data.products);
+                        if (res.data.transactions) setTransactions(res.data.transactions);
+                        if (res.data.settings) setPrinterSettings(res.data.settings);
+                        showToast('Data berhasil disinkronkan dengan Google Sheets!');
+                    } else {
+                        showToast('Gagal memuat data cloud.', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('Gagal terhubung ke Google Sheets API.', 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                if (apiUrl) {
+                    localStorage.setItem('bengkel_api_url', apiUrl);
+                    loadCloudData();
+                }
+            }, [apiUrl]);
+
+            const addToCart = (product) => {
+                if (product.category !== 'Jasa Servis' && product.stock <= 0) {
+                    showToast('Stok produk habis!', 'error');
+                    return;
+                }
+                setCart(prev => {
+                    const existing = prev.find(item => item.id === product.id);
+                    if (existing) {
+                        if (product.category !== 'Jasa Servis' && existing.qty >= product.stock) {
+                            showToast('Stok tidak mencukupi!', 'error');
+                            return prev;
+                        }
+                        return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+                    }
+                    return [...prev, { ...product, qty: 1 }];
+                });
+            };
+
+            const updateCartQty = (id, delta) => {
+                setCart(prev => {
+                    return prev.map(item => {
+                        if (item.id === id) {
+                            const newQty = item.qty + delta;
+                            if (newQty <= 0) return null;
+                            if (item.category !== 'Jasa Servis' && newQty > item.stock) {
+                                showToast('Stok tidak mencukupi!', 'error');
+                                return item;
+                            }
+                            return { ...item, qty: newQty };
+                        }
+                        return item;
+                    }).filter(Boolean);
+                });
+            };
+
+            const removeFromCart = (id) => {
+                setCart(prev => prev.filter(item => item.id !== id));
+            };
+
+            const cartSubtotal = useMemo(() => {
+                return cart.reduce((sum, item) => sum + (item.sellPrice * item.qty), 0);
+            }, [cart]);
+
+            const cartTotal = useMemo(() => {
+                return Math.max(0, cartSubtotal - discount);
+            }, [cartSubtotal, discount]);
+
+            const changeAmount = useMemo(() => {
+                const cash = parseFloat(cashAmount) || 0;
+                return Math.max(0, cash - cartTotal);
+            }, [cashAmount, cartTotal]);
+
+            /* Bluetooth Direct Scan */
+            const handleScanBluetooth = async () => {
+                if (!navigator.bluetooth) {
+                    showToast('Browser ini tidak mendukung Web Bluetooth API', 'error');
+                    return;
+                }
+                try {
+                    setBtStatus('Searching...');
+                    const device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+                    });
+                    setBtDevice(device);
+                    setBtStatus(`Connected (${device.name || 'Printer'})`);
+                    showToast(`Terhubung ke ${device.name || 'Printer Bluetooth'}`);
+                } catch (err) {
+                    console.error(err);
+                    setBtStatus('Disconnected');
+                    showToast('Gagal terhubung ke printer Bluetooth', 'error');
+                }
+            };
+
+            const handleProcessPayment = async () => {
+                if (cart.length === 0) {
+                    showToast('Keranjang belanja kosong!', 'error');
+                    return;
+                }
+                const cash = parseFloat(cashAmount) || 0;
+                if (paymentMethod === 'cash' && cash < cartTotal) {
+                    showToast('Uang pembayaran kurang!', 'error');
+                    return;
+                }
+
+                const newTransaction = {
+                    id: 'TRX-' + Date.now().toString().slice(-6),
+                    date: new Date().toISOString(),
+                    customerName: customerName || 'Pelanggan Umum',
+                    vehicleInfo: vehicleInfo || '-',
+                    plateNumber: plateNumber ? plateNumber.toUpperCase() : '-',
+                    items: [...cart],
+                    subtotal: cartSubtotal,
+                    discount: discount,
+                    total: cartTotal,
+                    paymentMethod,
+                    cashPaid: paymentMethod === 'cash' ? cash : cartTotal,
+                    change: paymentMethod === 'cash' ? changeAmount : 0
+                };
+
+                // Optimistic Local Stock Update
+                const updatedProducts = products.map(p => {
+                    const cartItem = cart.find(c => c.id === p.id);
+                    if (cartItem && p.category !== 'Jasa Servis') {
+                        return { ...p, stock: Math.max(0, p.stock - cartItem.qty) };
+                    }
+                    return p;
+                });
+
+                setProducts(updatedProducts);
+                setTransactions(prev => [newTransaction, ...prev]);
+                setLastTransaction(newTransaction);
+                setShowReceiptModal(true);
+
+                // Reset Form
+                setCart([]);
+                setCustomerName('');
+                setVehicleInfo('');
+                setPlateNumber('');
+                setCashAmount('');
+                setDiscount(0);
+
+                // Sync with Cloud
+                if (apiUrl) {
+                    await callApi('saveTransaction', { transaction: newTransaction, updatedProducts });
+                }
+
+                showToast('Transaksi berhasil disimpan!');
+
+                if (printerSettings.autoPrint) {
+                    triggerPrint(newTransaction);
+                }
+            };
+
+            const triggerPrint = (trx) => {
+                if (printerSettings.printMethod === 'system') {
+                    setTimeout(() => {
+                        window.print();
+                    }, 300);
+                } else if (printerSettings.printMethod === 'rawbt') {
+                    let printText = `${printerSettings.storeName}\n${printerSettings.storeAddress}\nTelp: ${printerSettings.storePhone}\n--------------------------------\n`;
+                    printText += `No: ${trx.id}\nTgl: ${new Date(trx.date).toLocaleString('id-ID')}\nPelanggan: ${trx.customerName}\nPlat: ${trx.plateNumber}\n--------------------------------\n`;
+                    trx.items.forEach(item => {
+                        printText += `${item.name}\n${item.qty} x ${formatRupiah(item.sellPrice)} = ${formatRupiah(item.qty * item.sellPrice)}\n`;
+                    });
+                    printText += `--------------------------------\nTotal: ${formatRupiah(trx.total)}\nBayar: ${formatRupiah(trx.cashPaid)}\nKembali: ${formatRupiah(trx.change)}\n--------------------------------\n${printerSettings.receiptFooter}\n\n\n`;
+                    window.location.href = `intent:#Intent;scheme=rawbt;package=ru.a404.rawbt;S.txt=${encodeURIComponent(printText)};end;`;
+                } else {
+                    window.print();
+                }
+            };
+
+            return (
+                <div className="flex flex-col md:flex-row min-h-screen">
+                    {/* Navigation Sidebar */}
+                    <aside className="no-print bg-slate-900 text-slate-300 w-full md:w-64 flex-shrink-0 flex flex-col justify-between p-4 md:min-h-screen">
+                        <div>
+                            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/30">
+                                        <i className="fa-solid fa-wrench"></i>
+                                    </div>
+                                    <div>
+                                        <h1 className="font-bold text-white text-base leading-tight">{printerSettings.storeName}</h1>
+                                        <span className="text-[11px] text-blue-400 font-medium">Cloud BengkelPOS</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Cloud Sync Status */}
+                            <div className="mt-3 p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between">
+                                <span className="flex items-center space-x-2">
+                                    <span className={`w-2.5 h-2.5 rounded-full ${apiUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                                    <span className="text-slate-300 font-semibold">{apiUrl ? (syncing ? 'Menyinkronkan...' : 'Cloud Online') : 'Lokal (Belum Konek GAS)'}</span>
+                                </span>
+                                {apiUrl && (
+                                    <button onClick={loadCloudData} title="Refresh Data" className="text-slate-400 hover:text-white">
+                                        <i className={`fa-solid fa-rotate ${syncing ? 'fa-spin' : ''}`}></i>
+                                    </button>
+                                )}
+                            </div>
+
+                            <nav className="mt-4 flex md:flex-col space-x-1 md:space-x-0 md:space-y-1 overflow-x-auto pb-2 md:pb-0">
+                                <button
+                                    onClick={() => setActiveTab('pos')}
+                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'pos' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-cash-register text-lg"></i>
+                                    <span>Kasir (POS)</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('dashboard')}
+                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-chart-line text-lg"></i>
+                                    <span>Ringkasan Usaha</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('products')}
+                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-boxes-stacked text-lg"></i>
+                                    <span>Stok & Barang</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('reports')}
+                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-file-invoice-dollar text-lg"></i>
+                                    <span>Laporan Penjualan</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('settings')}
+                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
+                                >
+                                    <i className="fa-solid fa-cloud-gear text-lg"></i>
+                                    <span>Database & Printer</span>
+                                </button>
+                            </nav>
+                        </div>
+
+                        <div className="hidden md:block pt-6 border-t border-slate-800 text-xs text-slate-500">
+                            <p className="font-semibold text-slate-400">Metode Cetak:</p>
+                            <p className="flex items-center space-x-2 mt-1">
+                                <span className={`w-2.5 h-2.5 rounded-full ${printerSettings.printMethod === 'bluetooth' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                <span className="capitalize">{printerSettings.printMethod} (58mm)</span>
+                            </p>
+                        </div>
+                    </aside>
+
+                    {/* Main View Container */}
+                    <main className="flex-1 p-4 md:p-6 overflow-y-auto min-h-screen no-print relative">
+                        {toast && (
+                            <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-white font-semibold text-sm flex items-center space-x-2 transition-all ${toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-check'}`}></i>
+                                <span>{toast.message}</span>
+                            </div>
+                        )}
+
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
+                                <i className="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600"></i>
+                                <p className="font-semibold text-slate-600 text-sm">Memuat Data dari Google Sheets...</p>
+                            </div>
+                        ) : (
+                            <>
+                                {activeTab === 'pos' && (
+                                    <POSView
+                                        products={products}
+                                        cart={cart}
+                                        addToCart={addToCart}
+                                        updateCartQty={updateCartQty}
+                                        removeFromCart={removeFromCart}
+                                        cartSubtotal={cartSubtotal}
+                                        cartTotal={cartTotal}
+                                        discount={discount}
+                                        setDiscount={setDiscount}
+                                        customerName={customerName}
+                                        setCustomerName={setCustomerName}
+                                        vehicleInfo={vehicleInfo}
+                                        setVehicleInfo={setVehicleInfo}
+                                        plateNumber={plateNumber}
+                                        setPlateNumber={setPlateNumber}
+                                        paymentMethod={paymentMethod}
+                                        setPaymentMethod={setPaymentMethod}
+                                        cashAmount={cashAmount}
+                                        setCashAmount={setCashAmount}
+                                        changeAmount={changeAmount}
+                                        handleProcessPayment={handleProcessPayment}
+                                    />
+                                )}
+
+                                {activeTab === 'dashboard' && (
+                                    <DashboardView
+                                        products={products}
+                                        transactions={transactions}
+                                        setActiveTab={setActiveTab}
+                                    />
+                                )}
+
+                                {activeTab === 'products' && (
+                                    <ProductsView
+                                        products={products}
+                                        setProducts={setProducts}
+                                        showAddProductModal={showAddProductModal}
+                                        setShowAddProductModal={setShowAddProductModal}
+                                        editingProduct={editingProduct}
+                                        setEditingProduct={setEditingProduct}
+                                        callApi={callApi}
+                                        showToast={showToast}
+                                    />
+                                )}
+
+                                {activeTab === 'reports' && (
+                                    <ReportsView
+                                        transactions={transactions}
+                                        setTransactions={setTransactions}
+                                        callApi={callApi}
+                                        onReprint={(trx) => {
+                                            setLastTransaction(trx);
+                                            setShowReceiptModal(true);
+                                            triggerPrint(trx);
+                                        }}
+                                        showToast={showToast}
+                                    />
+                                )}
+
+                                {activeTab === 'settings' && (
+                                    <PrinterSettingsView
+                                        apiUrl={apiUrl}
+                                        setApiUrl={setApiUrl}
+                                        settings={printerSettings}
+                                        setSettings={async (newSettings) => {
+                                            setPrinterSettings(newSettings);
+                                            if (apiUrl) {
+                                                await callApi('saveSettings', { settings: newSettings });
+                                            }
+                                        }}
+                                        btDevice={btDevice}
+                                        btStatus={btStatus}
+                                        onScanBluetooth={handleScanBluetooth}
+                                        onTestPrint={() => {
+                                            const testTrx = {
+                                                id: 'TEST-001',
+                                                date: new Date().toISOString(),
+                                                customerName: 'Tes Printer',
+                                                vehicleInfo: 'Honda Vario 150',
+                                                plateNumber: 'B 1234 ABC',
+                                                items: [{ name: 'Oli MPX2 Tes Print', qty: 1, sellPrice: 55000 }],
+                                                subtotal: 55000,
+                                                discount: 0,
+                                                total: 55000,
+                                                cashPaid: 60000,
+                                                change: 5000
+                                            };
+                                            setLastTransaction(testTrx);
+                                            setShowReceiptModal(true);
+                                            triggerPrint(testTrx);
+                                        }}
+                                    />
+                                )}
+                            </>
+                        )}
+                    </main>
+
+                    {showReceiptModal && lastTransaction && (
+                        <ReceiptModal
+                            transaction={lastTransaction}
+                            settings={printerSettings}
+                            onTriggerPrint={() => triggerPrint(lastTransaction)}
+                            onClose={() => setShowReceiptModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function POSView({
+            products, cart, addToCart, updateCartQty, removeFromCart,
+            cartSubtotal, cartTotal, discount, setDiscount,
+            customerName, setCustomerName, vehicleInfo, setVehicleInfo,
+            plateNumber, setPlateNumber, paymentMethod, setPaymentMethod,
+            cashAmount, setCashAmount, changeAmount, handleProcessPayment
+        }) {
+            const [search, setSearch] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('Semua');
+
+            const categories = useMemo(() => {
+                const cats = new Set(products.map(p => p.category));
+                return ['Semua', ...Array.from(cats)];
+            }, [products]);
+
+            const filteredProducts = useMemo(() => {
+                return products.filter(p => {
+                    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
+                    const matchesCat = selectedCategory === 'Semua' || p.category === selectedCategory;
+                    return matchesSearch && matchesCat;
+                });
+            }, [products, search, selectedCategory]);
+
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-7 space-y-4">
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
+                                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+                                <input
+                                    type="text"
+                                    placeholder="Cari sparepart / jasa servis..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                />
+                            </div>
+                            <div className="flex space-x-2 overflow-x-auto pb-1 sm:pb-0">
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategory(cat)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {filteredProducts.map(p => (
+                                <div
+                                    key={p.id}
+                                    onClick={() => addToCart(p)}
+                                    className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-400 cursor-pointer transition flex flex-col justify-between active:scale-[0.98]"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                            <span>{p.code}</span>
+                                            <span className={`px-1.5 py-0.5 rounded-md ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                {p.category}
+                                            </span>
+                                        </div>
+                                        <h3 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-2">{p.name}</h3>
+                                    </div>
+                                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100">
+                                        <span className="font-extrabold text-blue-600 text-xs sm:text-sm">{formatRupiah(p.sellPrice)}</span>
+                                        {p.category !== 'Jasa Servis' && (
+                                            <span className={`text-[11px] font-semibold ${p.stock <= p.minStock ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                                                Stok: {p.stock}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-5 bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+                                <h2 className="font-bold text-slate-800 text-base flex items-center space-x-2">
+                                    <i className="fa-solid fa-cart-shopping text-blue-600"></i>
+                                    <span>Keranjang Penjualan</span>
+                                </h2>
+                                <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-lg">
+                                    {cart.length} Item
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                                <div>
+                                    <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Pelanggan</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Umum / Bpk John"
+                                        value={customerName}
+                                        onChange={(e) => setCustomerName(e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Kendaraan</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Vario / Supra"
+                                        value={vehicleInfo}
+                                        onChange={(e) => setVehicleInfo(e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Nomor Plat</label>
+                                    <input
+                                        type="text"
+                                        placeholder="B 1234 ABC"
+                                        value={plateNumber}
+                                        onChange={(e) => setPlateNumber(e.target.value)}
+                                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold uppercase focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
+                                {cart.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-400 text-xs">
+                                        <i className="fa-solid fa-basket-shopping text-3xl mb-2 text-slate-300 block"></i>
+                                        Belum ada item dipilih
+                                    </div>
+                                ) : (
+                                    cart.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                                            <div className="flex-1 pr-2">
+                                                <h4 className="font-bold text-slate-800 line-clamp-1">{item.name}</h4>
+                                                <p className="text-[11px] text-slate-500">{formatRupiah(item.sellPrice)}</p>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => updateCartQty(item.id, -1)}
+                                                    className="w-6 h-6 bg-white border border-slate-300 rounded-lg font-bold text-slate-600 hover:bg-slate-100 flex items-center justify-center"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="font-bold text-slate-800 w-5 text-center">{item.qty}</span>
+                                                <button
+                                                    onClick={() => updateCartQty(item.id, 1)}
+                                                    className="w-6 h-6 bg-white border border-slate-300 rounded-lg font-bold text-slate-600 hover:bg-slate-100 flex items-center justify-center"
+                                                >
+                                                    +
+                                                </button>
+                                                <button
+                                                    onClick={() => removeFromCart(item.id)}
+                                                    className="text-red-500 hover:text-red-700 ml-1 p-1"
+                                                >
+                                                    <i className="fa-solid fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 pt-3 border-t border-slate-100">
+                            <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between text-slate-500 font-medium">
+                                    <span>Subtotal</span>
+                                    <span>{formatRupiah(cartSubtotal)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-500 font-medium">
+                                    <span>Diskon (Rp)</span>
+                                    <input
+                                        type="number"
+                                        value={discount || ''}
+                                        onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                                        placeholder="0"
+                                        className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-right text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex justify-between text-slate-900 font-extrabold text-base pt-1 border-t border-slate-100">
+                                    <span>Total Bayar</span>
+                                    <span className="text-blue-600">{formatRupiah(cartTotal)}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 pt-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={() => setPaymentMethod('cash')}
+                                        className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 ${paymentMethod === 'cash' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                    >
+                                        <i className="fa-solid fa-money-bill-wave"></i>
+                                        <span>Tunai</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setPaymentMethod('qris')}
+                                        className={`py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 ${paymentMethod === 'qris' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                    >
+                                        <i className="fa-solid fa-qrcode"></i>
+                                        <span>QRIS / Transfer</span>
+                                    </button>
+                                </div>
+
+                                {paymentMethod === 'cash' && (
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                            <span className="text-xs font-semibold text-slate-500">Uang Bayar</span>
+                                            <input
+                                                type="number"
+                                                placeholder="0"
+                                                value={cashAmount}
+                                                onChange={(e) => setCashAmount(e.target.value)}
+                                                className="w-32 px-2 py-1 bg-white border border-slate-300 rounded-lg text-right font-bold text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-xs px-1">
+                                            <span className="text-slate-500 font-medium">Kembalian:</span>
+                                            <span className={`font-bold ${changeAmount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                {formatRupiah(changeAmount)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={handleProcessPayment}
+                                disabled={cart.length === 0}
+                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center space-x-2 active:scale-[0.99]"
+                            >
+                                <i className="fa-solid fa-print"></i>
+                                <span>Proses Bayar & Cetak Struk</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function DashboardView({ products, transactions, setActiveTab }) {
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const todayTransactions = useMemo(() => {
+                return transactions.filter(t => t.date && t.date.startsWith(todayStr));
+            }, [transactions, todayStr]);
+
+            const todayIncome = useMemo(() => {
+                return todayTransactions.reduce((sum, t) => sum + (parseFloat(t.total) || 0), 0);
+            }, [todayTransactions]);
+
+            const lowStockProducts = useMemo(() => {
+                return products.filter(p => p.category !== 'Jasa Servis' && p.stock <= p.minStock);
+            }, [products]);
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Ringkasan Usaha Bengkel</h2>
+                            <p className="text-xs text-slate-500">Pantau omset harian dan ketersediaan stok kritis</p>
+                        </div>
+                        <button
+                            onClick={() => setActiveTab('pos')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 shadow-md shadow-blue-600/20"
+                        >
+                            <i className="fa-solid fa-plus"></i>
+                            <span>Buka Kasir POS</span>
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center text-xl font-bold">
+                                <i className="fa-solid fa-sack-dollar"></i>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Omset Hari Ini</p>
+                                <h3 className="text-lg font-extrabold text-slate-800">{formatRupiah(todayIncome)}</h3>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center text-xl font-bold">
+                                <i className="fa-solid fa-receipt"></i>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Transaksi Hari Ini</p>
+                                <h3 className="text-lg font-extrabold text-slate-800">{todayTransactions.length} Nota</h3>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center text-xl font-bold">
+                                <i className="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Total Item Barang</p>
+                                <h3 className="text-lg font-extrabold text-slate-800">{products.length} Jenis</h3>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center text-xl font-bold">
+                                <i className="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium">Stok Menipis</p>
+                                <h3 className="text-lg font-extrabold text-slate-800">{lowStockProducts.length} Item</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+                            <h3 className="font-bold text-slate-800 text-sm flex items-center space-x-2">
+                                <i className="fa-solid fa-triangle-exclamation text-red-500"></i>
+                                <span>Peringatan Stok Suku Cadang Menipis</span>
+                            </h3>
+                            <button
+                                onClick={() => setActiveTab('products')}
+                                className="text-blue-600 hover:text-blue-700 text-xs font-bold"
+                            >
+                                Kelola Semua Stok &rarr;
+                            </button>
+                        </div>
+
+                        {lowStockProducts.length === 0 ? (
+                            <p className="text-xs text-slate-400 py-4 text-center">Semua stok suku cadang aman dan tercukupi!</p>
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+                                {lowStockProducts.map(p => (
+                                    <div key={p.id} className="py-3 flex items-center justify-between text-xs">
+                                        <div>
+                                            <p className="font-bold text-slate-800">{p.name}</p>
+                                            <p className="text-[11px] text-slate-400">Kode: {p.code} | Kategori: {p.category}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="px-2.5 py-1 bg-red-50 text-red-600 rounded-lg font-extrabold text-xs">
+                                                Sisa: {p.stock} {p.unit}
+                                            </span>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">Min: {p.minStock}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function ProductsView({ products, setProducts, showAddProductModal, setShowAddProductModal, editingProduct, setEditingProduct, callApi, showToast }) {
+            const [search, setSearch] = useState('');
+            const [formData, setFormData] = useState({
+                code: '', name: '', category: 'Suku Cadang', buyPrice: 0, sellPrice: 0, stock: 0, minStock: 5, unit: 'Pcs'
+            });
+
+            const openAddModal = () => {
+                setEditingProduct(null);
+                setFormData({ code: 'SP-' + Math.floor(100 + Math.random() * 900), name: '', category: 'Suku Cadang', buyPrice: 0, sellPrice: 0, stock: 10, minStock: 5, unit: 'Pcs' });
+                setShowAddProductModal(true);
+            };
+
+            const openEditModal = (p) => {
+                setEditingProduct(p);
+                setFormData({ ...p });
+                setShowAddProductModal(true);
+            };
+
+            const handleSaveProduct = async (e) => {
+                e.preventDefault();
+                if (!formData.name || !formData.code) {
+                    showToast('Harap isi kode dan nama item!', 'error');
+                    return;
+                }
+
+                let updatedProduct;
+                if (editingProduct) {
+                    updatedProduct = { ...formData, id: editingProduct.id };
+                    setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p));
+                } else {
+                    updatedProduct = { ...formData, id: 'PRD-' + Date.now().toString().slice(-6) };
+                    setProducts(prev => [updatedProduct, ...prev]);
+                }
+
+                setShowAddProductModal(false);
+                await callApi('saveProduct', { product: updatedProduct });
+                showToast('Barang berhasil disimpan ke Google Sheets!');
+            };
+
+            const handleDeleteProduct = async (id) => {
+                if (window.confirm('Yakin ingin menghapus item ini dari database?')) {
+                    setProducts(prev => prev.filter(p => p.id !== id));
+                    await callApi('deleteProduct', { id });
+                    showToast('Item berhasil dihapus');
+                }
+            };
+
+            const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase()));
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Manajemen Stok & Suku Cadang</h2>
+                            <p className="text-xs text-slate-500">Pengaturan persediaan barang dan harga terhubung ke Google Sheets</p>
+                        </div>
+                        <button
+                            onClick={openAddModal}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-2 shadow-md shadow-blue-600/20"
+                        >
+                            <i className="fa-solid fa-plus"></i>
+                            <span>Tambah Sparepart / Jasa</span>
+                        </button>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="relative mb-4">
+                            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+                            <input
+                                type="text"
+                                placeholder="Cari nama atau kode barang..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-extrabold text-[10px]">
+                                        <th className="p-3">Kode</th>
+                                        <th className="p-3">Nama Suku Cadang</th>
+                                        <th className="p-3">Kategori</th>
+                                        <th className="p-3">Harga Modal</th>
+                                        <th className="p-3">Harga Jual</th>
+                                        <th className="p-3 text-center">Sisa Stok</th>
+                                        <th className="p-3 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filtered.map(p => (
+                                        <tr key={p.id} className="hover:bg-slate-50 transition">
+                                            <td className="p-3 font-bold text-slate-700">{p.code}</td>
+                                            <td className="p-3 font-bold text-slate-900">{p.name}</td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {p.category}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-slate-500">{formatRupiah(p.buyPrice)}</td>
+                                            <td className="p-3 font-bold text-blue-600">{formatRupiah(p.sellPrice)}</td>
+                                            <td className="p-3 text-center">
+                                                {p.category === 'Jasa Servis' ? (
+                                                    <span className="text-slate-400 font-semibold">-</span>
+                                                ) : (
+                                                    <span className={`px-2 py-1 rounded-lg font-extrabold ${p.stock <= p.minStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        {p.stock} {p.unit}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-center space-x-2">
+                                                <button onClick={() => openEditModal(p)} className="text-blue-600 hover:text-blue-800 p-1">
+                                                    <i className="fa-solid fa-pen-to-square"></i>
+                                                </button>
+                                                <button onClick={() => handleDeleteProduct(p.id)} className="text-red-500 hover:text-red-700 p-1">
+                                                    <i className="fa-solid fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {showAddProductModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+                                <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+                                    <h3 className="font-bold text-slate-800 text-base">
+                                        {editingProduct ? 'Edit Sparepart / Jasa' : 'Tambah Sparepart / Jasa Baru'}
+                                    </h3>
+                                    <button onClick={() => setShowAddProductModal(false)} className="text-slate-400 hover:text-slate-600">
+                                        <i className="fa-solid fa-xmark text-lg"></i>
+                                    </button>
+                                </div>
+
+                                <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-slate-600 font-semibold mb-1">Kode Barang</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.code}
+                                                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-600 font-semibold mb-1">Kategori</label>
+                                            <select
+                                                value={formData.category}
+                                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold bg-white"
+                                            >
+                                                <option value="Suku Cadang">Suku Cadang</option>
+                                                <option value="Oli & Pelumas">Oli & Pelumas</option>
+                                                <option value="Aki & Kelistrikan">Aki & Kelistrikan</option>
+                                                <option value="Ban & Velg">Ban & Velg</option>
+                                                <option value="Jasa Servis">Jasa Servis</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-slate-600 font-semibold mb-1">Nama Barang / Jasa</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-slate-600 font-semibold mb-1">Harga Modal (Rp)</label>
+                                            <input
+                                                type="number"
+                                                value={formData.buyPrice}
+                                                onChange={(e) => setFormData({ ...formData, buyPrice: parseFloat(e.target.value) || 0 })}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-600 font-semibold mb-1">Harga Jual (Rp)</label>
+                                            <input
+                                                type="number"
+                                                required
+                                                value={formData.sellPrice}
+                                                onChange={(e) => setFormData({ ...formData, sellPrice: parseFloat(e.target.value) || 0 })}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold text-blue-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {formData.category !== 'Jasa Servis' && (
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-slate-600 font-semibold mb-1">Stok Awal</label>
+                                                <input
+                                                    type="number"
+                                                    value={formData.stock}
+                                                    onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-slate-600 font-semibold mb-1">Min Stok Alert</label>
+                                                <input
+                                                    type="number"
+                                                    value={formData.minStock}
+                                                    onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-slate-600 font-semibold mb-1">Satuan</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.unit}
+                                                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-3 flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddProductModal(false)}
+                                            className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                                        >
+                                            Batal
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20"
+                                        >
+                                            Simpan
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function ReportsView({ transactions, setTransactions, callApi, onReprint, showToast }) {
+            const handleDeleteTrx = async (id) => {
+                if (window.confirm('Hapus riwayat transaksi ini dari database?')) {
+                    setTransactions(prev => prev.filter(t => t.id !== id));
+                    await callApi('deleteTransaction', { id });
+                    showToast('Transaksi telah dihapus');
+                }
+            };
+
+            const totalRevenue = useMemo(() => {
+                return transactions.reduce((sum, t) => sum + (parseFloat(t.total) || 0), 0);
+            }, [transactions]);
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800">Laporan Penjualan & Transaksi</h2>
+                            <p className="text-xs text-slate-500">Riwayat transaksi tersimpan permanen di Google Sheets</p>
+                        </div>
+                        <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 text-right">
+                            <span className="text-[10px] text-slate-400 font-semibold block">Total Akumulasi Omset</span>
+                            <span className="text-base font-extrabold text-blue-600">{formatRupiah(totalRevenue)}</span>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-extrabold text-[10px]">
+                                        <th className="p-3">No. Nota</th>
+                                        <th className="p-3">Waktu</th>
+                                        <th className="p-3">Pelanggan / Plat</th>
+                                        <th className="p-3">Metode</th>
+                                        <th className="p-3">Total Bayar</th>
+                                        <th className="p-3 text-center">Cetak / Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {transactions.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="p-6 text-center text-slate-400">Belum ada riwayat transaksi.</td>
+                                        </tr>
+                                    ) : (
+                                        transactions.map(t => (
+                                            <tr key={t.id} className="hover:bg-slate-50 transition">
+                                                <td className="p-3 font-bold text-slate-800">{t.id}</td>
+                                                <td className="p-3 text-slate-500">{new Date(t.date).toLocaleString('id-ID')}</td>
+                                                <td className="p-3">
+                                                    <span className="font-bold text-slate-800 block">{t.customerName}</span>
+                                                    <span className="text-[10px] text-slate-400">{t.vehicleInfo} ({t.plateNumber})</span>
+                                                </td>
+                                                <td className="p-3 capitalize font-semibold text-slate-600">{t.paymentMethod}</td>
+                                                <td className="p-3 font-bold text-blue-600">{formatRupiah(t.total)}</td>
+                                                <td className="p-3 text-center space-x-2">
+                                                    <button
+                                                        onClick={() => onReprint(t)}
+                                                        className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold px-2.5 py-1 rounded-lg text-xs transition"
+                                                    >
+                                                        <i className="fa-solid fa-print mr-1"></i> Cetak
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteTrx(t.id)}
+                                                        className="text-red-500 hover:text-red-700 p-1"
+                                                    >
+                                                        <i className="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function PrinterSettingsView({ apiUrl, setApiUrl, settings, setSettings, btDevice, btStatus, onScanBluetooth, onTestPrint }) {
+            const [urlInput, setUrlInput] = useState(apiUrl);
+
+            const handleChange = (field, value) => {
+                setSettings({ ...settings, [field]: value });
+            };
+
+            const handleLogoUpload = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    if (file.size > 1024 * 1024) {
+                        alert('Ukuran file logo terlalu besar. Gunakan gambar di bawah 1 MB.');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        handleChange('storeLogo', reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="space-y-6 max-w-3xl">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">Pengaturan Cloud Database & Printer</h2>
+                        <p className="text-xs text-slate-500">Konfigurasi koneksi Google Sheets dan printer thermal 58mm</p>
+                    </div>
+
+                    {/* Google Apps Script Integration Section */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                        <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
+                            <i className="fa-solid fa-cloud text-blue-600"></i>
+                            <span>Koneksi Google Sheets Web App URL</span>
+                        </h3>
+                        <p className="text-xs text-slate-500">Tempelkan Web App URL dari Google Apps Script untuk menghubungkan aplikasi dengan Google Sheets Anda.</p>
+                        
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="https://script.google.com/macros/s/.../exec"
+                                value={urlInput}
+                                onChange={(e) => setUrlInput(e.target.value)}
+                                className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                                onClick={() => setApiUrl(urlInput)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition"
+                            >
+                                Simpan URL
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Printer Settings */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
+                            <i className="fa-solid fa-print text-blue-600"></i>
+                            <span>Metode Cetak Printer Thermal</span>
+                        </h3>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div
+                                onClick={() => handleChange('printMethod', 'system')}
+                                className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'system' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">System Print</span>
+                                    {settings.printMethod === 'system' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Mencetak via dialog cetak HP/Tablet OS (Mopria/AirPrint).</p>
+                            </div>
+
+                            <div
+                                onClick={() => handleChange('printMethod', 'bluetooth')}
+                                className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'bluetooth' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">Web Bluetooth</span>
+                                    {settings.printMethod === 'bluetooth' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Cetak langsung ke Printer Thermal Bluetooth.</p>
+                            </div>
+
+                            <div
+                                onClick={() => handleChange('printMethod', 'rawbt')}
+                                className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'rawbt' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">App RawBT</span>
+                                    {settings.printMethod === 'rawbt' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Membuka aplikasi driver RawBT di Android.</p>
+                            </div>
+                        </div>
+
+                        {settings.printMethod === 'bluetooth' && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-700 block">Status Perangkat Bluetooth:</span>
+                                    <span className="text-xs text-blue-600 font-semibold">{btStatus}</span>
+                                </div>
+                                <button
+                                    onClick={onScanBluetooth}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-2"
+                                >
+                                    <i className="fa-solid fa-bluetooth"></i>
+                                    <span>Pindai & Sambungkan Bluetooth</span>
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.autoPrint}
+                                    onChange={(e) => handleChange('autoPrint', e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <span>Cetak Otomatis Setelah Bayar</span>
+                            </label>
+
+                            <button
+                                onClick={onTestPrint}
+                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-1.5"
+                            >
+                                <i className="fa-solid fa-vial"></i>
+                                <span>Tes Cetak Struk</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Store Identity Settings */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
+                            <i className="fa-solid fa-store text-blue-600"></i>
+                            <span>Identitas Bengkel Pada Struk Nota</span>
+                        </h3>
+
+                        <div className="space-y-4">
+                            {/* Upload Logo Section */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                <div className="w-16 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                                    {settings.storeLogo ? (
+                                        <img src={settings.storeLogo} alt="Logo Bengkel" className="w-full h-full object-contain p-1" />
+                                    ) : (
+                                        <i className="fa-solid fa-wrench text-2xl text-slate-400"></i>
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700 block">Logo Bengkel / Toko</label>
+                                    <p className="text-[11px] text-slate-400">Pilih gambar logo bengkel (PNG/JPG/SVG, max 1MB).</p>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <label className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer transition flex items-center space-x-1.5 shadow-sm">
+                                            <i className="fa-solid fa-upload"></i>
+                                            <span>{settings.storeLogo ? 'Ganti Logo' : 'Upload Logo'}</span>
+                                            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                                        </label>
+                                        {settings.storeLogo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleChange('storeLogo', null)}
+                                                className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-1.5 rounded-lg transition"
+                                            >
+                                                Hapus Logo
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Nama Bengkel / Toko</label>
+                                <input
+                                    type="text"
+                                    value={settings.storeName}
+                                    onChange={(e) => handleChange('storeName', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">Alamat Bengkel</label>
+                                    <input
+                                        type="text"
+                                        value={settings.storeAddress}
+                                        onChange={(e) => handleChange('storeAddress', e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">No. Telp / WhatsApp Bengkel</label>
+                                    <input
+                                        type="text"
+                                        value={settings.storePhone}
+                                        onChange={(e) => handleChange('storePhone', e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Catatan Footer Struk</label>
+                                <textarea
+                                    rows="2"
+                                    value={settings.receiptFooter}
+                                    onChange={(e) => handleChange('receiptFooter', e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                ></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ReceiptModal({ transaction, settings, onTriggerPrint, onClose }) {
+            return (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 no-print relative">
+                        <div className="text-center space-y-1 border-b pb-4 border-dashed border-slate-200">
+                            {settings.storeLogo ? (
+                                <img src={settings.storeLogo} alt="Logo Bengkel" className="h-12 max-w-[120px] object-contain mx-auto mb-2 filter contrast-125 grayscale" />
+                            ) : (
+                                <div className="w-10 h-10 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-lg mb-2">
+                                    <i className="fa-solid fa-wrench"></i>
+                                </div>
+                            )}
+                            <h2 className="font-bold text-lg text-slate-900 uppercase">{settings.storeName}</h2>
+                            <p className="text-xs text-slate-500">{settings.storeAddress}</p>
+                            <p className="text-[11px] text-slate-400">Telp: {settings.storePhone}</p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-1">{transaction.id} | {new Date(transaction.date).toLocaleString('id-ID')}</p>
+                        </div>
+
+                        <div className="text-xs space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100 font-mono">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Pelanggan:</span>
+                                <span className="font-bold text-slate-800">{transaction.customerName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Kendaraan/Plat:</span>
+                                <span className="font-bold text-slate-800">{transaction.vehicleInfo} ({transaction.plateNumber})</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 text-xs font-mono max-h-40 overflow-y-auto">
+                            {transaction.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between border-b pb-1 border-slate-100">
+                                    <div>
+                                        <p className="font-bold text-slate-800">{item.name}</p>
+                                        <p className="text-[10px] text-slate-400">{item.qty} x {formatRupiah(item.sellPrice)}</p>
+                                    </div>
+                                    <span className="font-bold text-slate-800">{formatRupiah(item.qty * item.sellPrice)}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="border-t pt-2 border-dashed border-slate-200 text-xs font-mono space-y-1">
+                            <div className="flex justify-between font-bold text-slate-800">
+                                <span>TOTAL</span>
+                                <span>{formatRupiah(transaction.total)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500">
+                                <span>Bayar ({transaction.paymentMethod})</span>
+                                <span>{formatRupiah(transaction.cashPaid)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500">
+                                <span>Kembali</span>
+                                <span>{formatRupiah(transaction.change)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-2 pt-2">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                            >
+                                Tutup
+                            </button>
+                            <button
+                                onClick={onTriggerPrint}
+                                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition flex items-center justify-center space-x-1.5"
+                            >
+                                <i className="fa-solid fa-print"></i>
+                                <span>Cetak Struk</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Template Cetak Thermal 58mm */}
+                    <div className="hidden print-only thermal-receipt">
+                        <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+                            {settings.storeLogo && (
+                                <img
+                                    src={settings.storeLogo}
+                                    style={{ maxWidth: '35mm', maxHeight: '14mm', margin: '0 auto 4px auto', display: 'block', filter: 'grayscale(100%) contrast(200%)' }}
+                                />
+                            )}
+                            <strong style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>{settings.storeName}</strong>
+                            <span style={{ fontSize: '8px', display: 'block' }}>{settings.storeAddress}</span>
+                            <span style={{ fontSize: '8px', display: 'block' }}>Telp: {settings.storePhone}</span>
+                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                        </div>
+
+                        <div style={{ fontSize: '8px', marginBottom: '4px' }}>
+                            <div>No: {transaction.id}</div>
+                            <div>Tgl: {new Date(transaction.date).toLocaleString('id-ID')}</div>
+                            <div>Pelanggan: {transaction.customerName}</div>
+                            <div>Plat/Motor: {transaction.plateNumber} / {transaction.vehicleInfo}</div>
+                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                        </div>
+
+                        <div style={{ fontSize: '8px', marginBottom: '4px' }}>
+                            {transaction.items.map((item, i) => (
+                                <div key={i} style={{ marginBottom: '2px' }}>
+                                    <div style={{ fontWeight: 'bold' }}>{item.name}</div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>{item.qty} x {formatRupiah(item.sellPrice)}</span>
+                                        <span>{formatRupiah(item.qty * item.sellPrice)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                        </div>
+
+                        <div style={{ fontSize: '8px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Subtotal:</span>
+                                <span>{formatRupiah(transaction.subtotal)}</span>
+                            </div>
+                            {transaction.discount > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Diskon:</span>
+                                    <span>-{formatRupiah(transaction.discount)}</span>
+                                </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '10px', marginTop: '2px' }}>
+                                <span>TOTAL:</span>
+                                <span>{formatRupiah(transaction.total)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Bayar:</span>
+                                <span>{formatRupiah(transaction.cashPaid)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Kembali:</span>
+                                <span>{formatRupiah(transaction.change)}</span>
+                            </div>
+                            <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
+                        </div>
+
+                        <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '4px', whitespace: 'pre-line' }}>
+                            {settings.receiptFooter}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
