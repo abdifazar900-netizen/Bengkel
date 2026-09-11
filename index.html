@@ -83,6 +83,7 @@
             const [loading, setLoading] = useState(false);
             const [syncing, setSyncing] = useState(false);
 
+            /* SEKARANG STATE DIMULAI DARI ARRAY KOSONG (MURNI DARI DATABASE CLOUD) */
             const [products, setProducts] = useState([]);
             const [transactions, setTransactions] = useState([]);
             const [printerSettings, setPrinterSettings] = useState(DEFAULT_PRINTER_SETTINGS);
@@ -571,33 +572,41 @@
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {filteredProducts.map(p => (
-                                <div
-                                    key={p.id}
-                                    onClick={() => addToCart(p)}
-                                    className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-400 cursor-pointer transition flex flex-col justify-between active:scale-[0.98]"
-                                >
-                                    <div>
-                                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
-                                            <span>{p.code}</span>
-                                            <span className={`px-1.5 py-0.5 rounded-md ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                {p.category}
-                                            </span>
+                        {filteredProducts.length === 0 ? (
+                            <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-2">
+                                <i className="fa-solid fa-boxes-stacked text-4xl text-slate-300"></i>
+                                <p className="font-semibold text-sm text-slate-600">Belum ada barang di database.</p>
+                                <p className="text-xs">Silakan tambahkan suku cadang/jasa di menu <strong>Stok & Barang</strong> atau hubungkan Google Sheets.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {filteredProducts.map(p => (
+                                    <div
+                                        key={p.id}
+                                        onClick={() => addToCart(p)}
+                                        className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-400 cursor-pointer transition flex flex-col justify-between active:scale-[0.98]"
+                                    >
+                                        <div>
+                                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                <span>{p.code}</span>
+                                                <span className={`px-1.5 py-0.5 rounded-md ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {p.category}
+                                                </span>
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-2">{p.name}</h3>
                                         </div>
-                                        <h3 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-2">{p.name}</h3>
+                                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100">
+                                            <span className="font-extrabold text-blue-600 text-xs sm:text-sm">{formatRupiah(p.sellPrice)}</span>
+                                            {p.category !== 'Jasa Servis' && (
+                                                <span className={`text-[11px] font-semibold ${p.stock <= p.minStock ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                                                    Stok: {p.stock}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-slate-100">
-                                        <span className="font-extrabold text-blue-600 text-xs sm:text-sm">{formatRupiah(p.sellPrice)}</span>
-                                        {p.category !== 'Jasa Servis' && (
-                                            <span className={`text-[11px] font-semibold ${p.stock <= p.minStock ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-                                                Stok: {p.stock}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="lg:col-span-5 bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
@@ -964,36 +973,42 @@
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filtered.map(p => (
-                                        <tr key={p.id} className="hover:bg-slate-50 transition">
-                                            <td className="p-3 font-bold text-slate-700">{p.code}</td>
-                                            <td className="p-3 font-bold text-slate-900">{p.name}</td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                    {p.category}
-                                                </span>
-                                            </td>
-                                            <td className="p-3 text-slate-500">{formatRupiah(p.buyPrice)}</td>
-                                            <td className="p-3 font-bold text-blue-600">{formatRupiah(p.sellPrice)}</td>
-                                            <td className="p-3 text-center">
-                                                {p.category === 'Jasa Servis' ? (
-                                                    <span className="text-slate-400 font-semibold">-</span>
-                                                ) : (
-                                                    <span className={`px-2 py-1 rounded-lg font-extrabold ${p.stock <= p.minStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                        {p.stock} {p.unit}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="p-3 text-center space-x-2">
-                                                <button onClick={() => openEditModal(p)} className="text-blue-600 hover:text-blue-800 p-1">
-                                                    <i className="fa-solid fa-pen-to-square"></i>
-                                                </button>
-                                                <button onClick={() => handleDeleteProduct(p.id)} className="text-red-500 hover:text-red-700 p-1">
-                                                    <i className="fa-solid fa-trash"></i>
-                                                </button>
-                                            </td>
+                                    {filtered.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="p-6 text-center text-slate-400">Belum ada barang di database. Klik tombol "Tambah Sparepart / Jasa" untuk menambahkan.</td>
                                         </tr>
-                                    ))}
+                                    ) : (
+                                        filtered.map(p => (
+                                            <tr key={p.id} className="hover:bg-slate-50 transition">
+                                                <td className="p-3 font-bold text-slate-700">{p.code}</td>
+                                                <td className="p-3 font-bold text-slate-900">{p.name}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-0.5 rounded-md font-semibold text-[10px] ${p.category === 'Jasa Servis' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                        {p.category}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-slate-500">{formatRupiah(p.buyPrice)}</td>
+                                                <td className="p-3 font-bold text-blue-600">{formatRupiah(p.sellPrice)}</td>
+                                                <td className="p-3 text-center">
+                                                    {p.category === 'Jasa Servis' ? (
+                                                        <span className="text-slate-400 font-semibold">-</span>
+                                                    ) : (
+                                                        <span className={`px-2 py-1 rounded-lg font-extrabold ${p.stock <= p.minStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            {p.stock} {p.unit}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-center space-x-2">
+                                                    <button onClick={() => openEditModal(p)} className="text-blue-600 hover:text-blue-800 p-1">
+                                                        <i className="fa-solid fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteProduct(p.id)} className="text-red-500 hover:text-red-700 p-1">
+                                                        <i className="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
