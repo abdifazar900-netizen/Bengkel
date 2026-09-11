@@ -907,16 +907,19 @@
             };
 
             const handleSelectMaster = (selectedCode) => {
-                const found = masterProducts.find(m => String(m.code) === String(selectedCode));
-                if (found) {
-                    setFormData(prev => ({
-                        ...prev,
-                        code: found.code,
-                        name: found.name,
-                        category: found.category || prev.category
-                    }));
-                }
-            };
+    const found = masterProducts.find(m => String(m.code) === String(selectedCode));
+    if (found) {
+        setFormData(prev => ({
+            ...prev,
+            code: found.code,
+            name: found.name,
+            category: found.category || prev.category,
+            buyPrice: 0,   // Set awal 0
+            sellPrice: 0,  // Set awal 0
+            stock: 0       // Set awal 0
+        }));
+    }
+};
 
             const handleSaveProduct = async (e) => {
                 e.preventDefault();
