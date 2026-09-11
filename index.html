@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BengkelPOS - Cloud Edition</title>
     <!-- PWA Meta Tags -->
-<link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#1e293b">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1048/1048313.png">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1048/1048313.png">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome CDN -->
@@ -68,6 +68,9 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
+        // Hardcode URL Web App Google Apps Script
+        const API_URL = "https://script.google.com/macros/s/AKfycbzr0SZUGYfn6ym6kiIGSXcSpTpNhciUALiLctr0q7kpP-fQwDtq6PU3yJFnxEuqdcM8LQ/exec";
+
         const DEFAULT_PRINTER_SETTINGS = {
             printMethod: 'system',
             paperWidth: '58mm',
@@ -85,7 +88,6 @@
 
         function App() {
             const [activeTab, setActiveTab] = useState('pos');
-            const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('bengkel_api_url') || '');
             const [loading, setLoading] = useState(false);
             const [syncing, setSyncing] = useState(false);
 
@@ -118,10 +120,9 @@
             };
 
             const callApi = async (action, payload = {}) => {
-                if (!apiUrl) return null;
                 setSyncing(true);
                 try {
-                    const response = await fetch(apiUrl, {
+                    const response = await fetch(API_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action, payload })
                     });
@@ -136,17 +137,16 @@
                 } catch (err) {
                     console.error('API Error:', err);
                     setSyncing(false);
-                    showToast('Koneksi ke Google Sheets gagal! Periksa URL Web App.', 'error');
+                    showToast('Koneksi ke Google Sheets gagal!', 'error');
                     return null;
                 }
             };
 
-            /* Load initial data on startup or API URL change */
+            /* Load initial data on startup */
             const loadCloudData = async () => {
-                if (!apiUrl) return;
                 setLoading(true);
                 try {
-                    const response = await fetch(`${apiUrl}?action=getAllData`);
+                    const response = await fetch(`${API_URL}?action=getAllData`);
                     const res = await response.json();
                     if (res.status === 'success') {
                         if (res.data.products) setProducts(res.data.products);
@@ -166,11 +166,8 @@
             };
 
             useEffect(() => {
-                if (apiUrl) {
-                    localStorage.setItem('bengkel_api_url', apiUrl);
-                    loadCloudData();
-                }
-            }, [apiUrl]);
+                loadCloudData();
+            }, []);
 
             const addToCart = (product) => {
                 if (product.category !== 'Jasa Servis' && product.stock <= 0) {
@@ -292,9 +289,7 @@
                 setCashAmount('');
                 setDiscount(0);
 
-                if (apiUrl) {
-                    await callApi('saveTransaction', { transaction: newTransaction, updatedProducts });
-                }
+                await callApi('saveTransaction', { transaction: newTransaction, updatedProducts });
 
                 showToast('Transaksi berhasil disimpan!');
 
@@ -339,14 +334,12 @@
 
                             <div className="mt-3 p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between">
                                 <span className="flex items-center space-x-2">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${apiUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                                    <span className="text-slate-300 font-semibold">{apiUrl ? (syncing ? 'Menyinkronkan...' : 'Cloud Online') : 'Lokal (Belum Konek GAS)'}</span>
+                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span className="text-slate-300 font-semibold">{syncing ? 'Menyinkronkan...' : 'Cloud Online'}</span>
                                 </span>
-                                {apiUrl && (
-                                    <button onClick={loadCloudData} title="Refresh Data" className="text-slate-400 hover:text-white">
-                                        <i className={`fa-solid fa-rotate ${syncing ? 'fa-spin' : ''}`}></i>
-                                    </button>
-                                )}
+                                <button onClick={loadCloudData} title="Refresh Data" className="text-slate-400 hover:text-white">
+                                    <i className={`fa-solid fa-rotate ${syncing ? 'fa-spin' : ''}`}></i>
+                                </button>
                             </div>
 
                             <nav className="mt-4 flex md:flex-col space-x-1 md:space-x-0 md:space-y-1 overflow-x-auto pb-2 md:pb-0">
@@ -476,14 +469,10 @@
 
                                 {activeTab === 'settings' && (
                                     <PrinterSettingsView
-                                        apiUrl={apiUrl}
-                                        setApiUrl={setApiUrl}
                                         settings={printerSettings}
                                         setSettings={async (newSettings) => {
                                             setPrinterSettings(newSettings);
-                                            if (apiUrl) {
-                                                await callApi('saveSettings', { settings: newSettings });
-                                            }
+                                            await callApi('saveSettings', { settings: newSettings });
                                         }}
                                         btDevice={btDevice}
                                         btStatus={btStatus}
@@ -1253,9 +1242,7 @@
             );
         }
 
-        function PrinterSettingsView({ apiUrl, setApiUrl, settings, setSettings, btDevice, btStatus, onScanBluetooth, onTestPrint }) {
-            const [urlInput, setUrlInput] = useState(apiUrl);
-
+        function PrinterSettingsView({ settings, setSettings, btDevice, btStatus, onScanBluetooth, onTestPrint }) {
             const handleChange = (field, value) => {
                 setSettings({ ...settings, [field]: value });
             };
@@ -1285,24 +1272,11 @@
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                         <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
                             <i className="fa-solid fa-cloud text-blue-600"></i>
-                            <span>Koneksi Google Sheets Web App URL</span>
+                            <span>Status Koneksi Google Sheets</span>
                         </h3>
-                        <p className="text-xs text-slate-500">Tempelkan Web App URL dari Google Apps Script untuk menghubungkan aplikasi dengan Google Sheets Anda.</p>
-                        
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                placeholder="https://script.google.com/macros/s/.../exec"
-                                value={urlInput}
-                                onChange={(e) => setUrlInput(e.target.value)}
-                                className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                                onClick={() => setApiUrl(urlInput)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition"
-                            >
-                                Simpan URL
-                            </button>
+                        <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-600 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span>URL Web App terhubung secara permanen ke Google Sheets</span>
                         </div>
                     </div>
 
@@ -1612,14 +1586,15 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+
     <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('Service Worker Registered!', reg))
-        .catch(err => console.error('Service Worker Registration Failed!', err));
-    });
-  }
-</script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker Registered!', reg))
+                    .catch(err => console.error('Service Worker Registration Failed!', err));
+            });
+        }
+    </script>
 </body>
 </html>
