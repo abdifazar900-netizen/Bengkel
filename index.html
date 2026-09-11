@@ -83,8 +83,8 @@
             const [loading, setLoading] = useState(false);
             const [syncing, setSyncing] = useState(false);
 
-            /* SEKARANG STATE DIMULAI DARI ARRAY KOSONG (MURNI DARI DATABASE CLOUD) */
             const [products, setProducts] = useState([]);
+            const [masterProducts, setMasterProducts] = useState([]);
             const [transactions, setTransactions] = useState([]);
             const [printerSettings, setPrinterSettings] = useState(DEFAULT_PRINTER_SETTINGS);
 
@@ -144,6 +144,7 @@
                     const res = await response.json();
                     if (res.status === 'success') {
                         if (res.data.products) setProducts(res.data.products);
+                        if (res.data.masterProducts) setMasterProducts(res.data.masterProducts);
                         if (res.data.transactions) setTransactions(res.data.transactions);
                         if (res.data.settings) setPrinterSettings(res.data.settings);
                         showToast('Data berhasil disinkronkan dengan Google Sheets!');
@@ -265,7 +266,6 @@
                     change: paymentMethod === 'cash' ? changeAmount : 0
                 };
 
-                // Optimistic Local Stock Update
                 const updatedProducts = products.map(p => {
                     const cartItem = cart.find(c => c.id === p.id);
                     if (cartItem && p.category !== 'Jasa Servis') {
@@ -279,7 +279,6 @@
                 setLastTransaction(newTransaction);
                 setShowReceiptModal(true);
 
-                // Reset Form
                 setCart([]);
                 setCustomerName('');
                 setVehicleInfo('');
@@ -287,7 +286,6 @@
                 setCashAmount('');
                 setDiscount(0);
 
-                // Sync with Cloud
                 if (apiUrl) {
                     await callApi('saveTransaction', { transaction: newTransaction, updatedProducts });
                 }
@@ -319,7 +317,6 @@
 
             return (
                 <div className="flex flex-col md:flex-row min-h-screen">
-                    {/* Navigation Sidebar */}
                     <aside className="no-print bg-slate-900 text-slate-300 w-full md:w-64 flex-shrink-0 flex flex-col justify-between p-4 md:min-h-screen">
                         <div>
                             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -334,7 +331,6 @@
                                 </div>
                             </div>
 
-                            {/* Cloud Sync Status */}
                             <div className="mt-3 p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between">
                                 <span className="flex items-center space-x-2">
                                     <span className={`w-2.5 h-2.5 rounded-full ${apiUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
@@ -395,7 +391,6 @@
                         </div>
                     </aside>
 
-                    {/* Main View Container */}
                     <main className="flex-1 p-4 md:p-6 overflow-y-auto min-h-screen no-print relative">
                         {toast && (
                             <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-white font-semibold text-sm flex items-center space-x-2 transition-all ${toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
@@ -449,6 +444,7 @@
                                     <ProductsView
                                         products={products}
                                         setProducts={setProducts}
+                                        masterProducts={masterProducts}
                                         showAddProductModal={showAddProductModal}
                                         setShowAddProductModal={setShowAddProductModal}
                                         editingProduct={editingProduct}
@@ -882,7 +878,7 @@
             );
         }
 
-        function ProductsView({ products, setProducts, showAddProductModal, setShowAddProductModal, editingProduct, setEditingProduct, callApi, showToast }) {
+        function ProductsView({ products, setProducts, masterProducts, showAddProductModal, setShowAddProductModal, editingProduct, setEditingProduct, callApi, showToast }) {
             const [search, setSearch] = useState('');
             const [formData, setFormData] = useState({
                 code: '', name: '', category: 'Suku Cadang', buyPrice: 0, sellPrice: 0, stock: 0, minStock: 5, unit: 'Pcs'
@@ -890,7 +886,7 @@
 
             const openAddModal = () => {
                 setEditingProduct(null);
-                setFormData({ code: 'SP-' + Math.floor(100 + Math.random() * 900), name: '', category: 'Suku Cadang', buyPrice: 0, sellPrice: 0, stock: 10, minStock: 5, unit: 'Pcs' });
+                setFormData({ code: '', name: '', category: 'Suku Cadang', buyPrice: 0, sellPrice: 0, stock: 10, minStock: 5, unit: 'Pcs' });
                 setShowAddProductModal(true);
             };
 
@@ -898,6 +894,18 @@
                 setEditingProduct(p);
                 setFormData({ ...p });
                 setShowAddProductModal(true);
+            };
+
+            const handleSelectMaster = (selectedCode) => {
+                const found = masterProducts.find(m => String(m.code) === String(selectedCode));
+                if (found) {
+                    setFormData(prev => ({
+                        ...prev,
+                        code: found.code,
+                        name: found.name,
+                        category: found.category || prev.category
+                    }));
+                }
             };
 
             const handleSaveProduct = async (e) => {
@@ -1027,6 +1035,23 @@
                                 </div>
 
                                 <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
+                                    {!editingProduct && masterProducts && masterProducts.length > 0 && (
+                                        <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
+                                            <label className="block text-blue-800 font-bold text-xs">Pilih dari Sheet Data_product:</label>
+                                            <select
+                                                onChange={(e) => handleSelectMaster(e.target.value)}
+                                                className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-semibold focus:outline-none"
+                                            >
+                                                <option value="">-- Pilih Barang dari Master --</option>
+                                                {masterProducts.map((m, idx) => (
+                                                    <option key={idx} value={m.code}>
+                                                        [{m.code}] {m.name} ({m.category})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-slate-600 font-semibold mb-1">Kode Barang</label>
@@ -1251,7 +1276,6 @@
                         <p className="text-xs text-slate-500">Konfigurasi koneksi Google Sheets dan printer thermal 58mm</p>
                     </div>
 
-                    {/* Google Apps Script Integration Section */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                         <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
                             <i className="fa-solid fa-cloud text-blue-600"></i>
@@ -1276,7 +1300,6 @@
                         </div>
                     </div>
 
-                    {/* Printer Settings */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                         <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
                             <i className="fa-solid fa-print text-blue-600"></i>
@@ -1355,7 +1378,6 @@
                         </div>
                     </div>
 
-                    {/* Store Identity Settings */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                         <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
                             <i className="fa-solid fa-store text-blue-600"></i>
@@ -1363,7 +1385,6 @@
                         </h3>
 
                         <div className="space-y-4">
-                            {/* Upload Logo Section */}
                             <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="w-16 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                                     {settings.storeLogo ? (
@@ -1513,7 +1534,6 @@
                         </div>
                     </div>
 
-                    {/* Template Cetak Thermal 58mm */}
                     <div className="hidden print-only thermal-receipt">
                         <div style={{ textAlign: 'center', marginBottom: '4px' }}>
                             {settings.storeLogo && (
