@@ -1448,7 +1448,7 @@
         function ReceiptModal({ transaction, settings, onTriggerPrint, onClose }) {
     return (
         <div>
-            {/* Modal Layar UI */}
+            {/* Modal Layar UI (Pratinjau Layar) */}
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
                 <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 relative">
                     <div className="text-center space-y-1 border-b pb-4 border-dashed border-slate-200">
@@ -1503,6 +1503,13 @@
                         </div>
                     </div>
 
+                    {/* Footer Catatan Tambahan UI Layar */}
+                    {settings && settings.receiptFooter && (
+                        <div className="pt-3 border-t border-dashed border-slate-200 text-center text-[11px] text-slate-600 font-mono whitespace-pre-line leading-relaxed">
+                            {settings.receiptFooter}
+                        </div>
+                    )}
+
                     <div className="flex space-x-2 pt-2">
                         <button
                             onClick={onClose}
@@ -1521,7 +1528,7 @@
                 </div>
             </div>
 
-            {/* Template Khusus Kertas Printer Thermal (Hanya Muncul Saat Print) */}
+            {/* Template Khusus Kertas Printer Thermal 58mm */}
             <div className="thermal-receipt">
                 <div style={{ textAlign: 'center', marginBottom: '4px' }}>
                     {settings.storeLogo && (
@@ -1548,9 +1555,9 @@
                     {transaction.items.map((item, i) => (
                         <div key={i} style={{ marginBottom: '2px' }}>
                             <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                            <div style={{ display: 'flex', fontStyle: 'normal', justify: 'space-between' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span>{item.qty} x {formatRupiah(item.sellPrice)}</span>
-                                <span style={{ float: 'right' }}>{formatRupiah(item.qty * item.sellPrice)}</span>
+                                <span>{formatRupiah(item.qty * item.sellPrice)}</span>
                             </div>
                         </div>
                     ))}
@@ -1583,8 +1590,9 @@
                     <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
                 </div>
 
-                <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '4px', whitespace: 'pre-line' }}>
-                    {settings.receiptFooter}
+                {/* Footer Kertas Struk Hasil Cetak */}
+                <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '6px', whitespace: 'pre-line', wordBreak: 'break-word' }}>
+                    {settings ? settings.receiptFooter : ''}
                 </div>
             </div>
         </div>
