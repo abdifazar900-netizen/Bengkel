@@ -69,7 +69,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Hardcode URL Web App Google Apps Script
+        // Ganti dengan URL Web App Google Apps Script kamu
         const API_URL = "https://script.google.com/macros/s/AKfycbzr0SZUGYfn6ym6kiIGSXcSpTpNhciUALiLctr0q7kpP-fQwDtq6PU3yJFnxEuqdcM8LQ/exec";
 
         const DEFAULT_PRINTER_SETTINGS = {
@@ -133,7 +133,7 @@
                     const res = await response.json();
                     setSyncing(false);
                     if (res.status === 'success') {
-                        return res.data;
+                        return res.data || true;
                     } else {
                         showToast(res.message || 'Gagal memproses ke database cloud', 'error');
                         return null;
@@ -146,7 +146,6 @@
                 }
             };
 
-            /* Load initial data on startup dengan caching */
             const loadCloudData = async () => {
                 const cachedSettings = localStorage.getItem('cache_settings');
                 const cachedProducts = localStorage.getItem('cache_products');
@@ -186,8 +185,6 @@
                             });
                         }
                         showToast('Data berhasil disinkronkan!');
-                    } else {
-                        showToast('Gagal memuat data cloud.', 'error');
                     }
                 } catch (err) {
                     console.error(err);
@@ -253,7 +250,6 @@
                 return Math.max(0, cash - cartTotal);
             }, [cashAmount, cartTotal]);
 
-            /* Bluetooth Direct Scan */
             const handleScanBluetooth = async () => {
                 if (!navigator.bluetooth) {
                     showToast('Browser ini tidak mendukung Web Bluetooth API', 'error');
@@ -327,7 +323,6 @@
                 setDiscount(0);
 
                 await callApi('saveTransaction', { transaction: newTransaction, updatedProducts });
-
                 showToast('Transaksi berhasil disimpan!');
 
                 if (printerSettings.autoPrint) {
@@ -337,9 +332,7 @@
 
             const triggerPrint = (trx) => {
                 if (printerSettings.printMethod === 'system') {
-                    setTimeout(() => {
-                        window.print();
-                    }, 300);
+                    setTimeout(() => window.print(), 300);
                 } else if (printerSettings.printMethod === 'rawbt') {
                     let printText = `${printerSettings.storeName}\n${printerSettings.storeAddress}\nTelp: ${printerSettings.storePhone}\n--------------------------------\n`;
                     printText += `No: ${trx.id}\nTgl: ${new Date(trx.date).toLocaleString('id-ID')}\nPelanggan: ${trx.customerName}\nPlat: ${trx.plateNumber}\n--------------------------------\n`;
@@ -380,40 +373,20 @@
                             </div>
 
                             <nav className="mt-4 flex md:flex-col space-x-1 md:space-x-0 md:space-y-1 overflow-x-auto pb-2 md:pb-0">
-                                <button
-                                    onClick={() => setActiveTab('pos')}
-                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'pos' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
-                                >
-                                    <i className="fa-solid fa-cash-register text-lg"></i>
-                                    <span>Kasir (POS)</span>
+                                <button onClick={() => setActiveTab('pos')} className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'pos' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                    <i className="fa-solid fa-cash-register text-lg"></i><span>Kasir (POS)</span>
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('dashboard')}
-                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
-                                >
-                                    <i className="fa-solid fa-chart-line text-lg"></i>
-                                    <span>Ringkasan Usaha</span>
+                                <button onClick={() => setActiveTab('dashboard')} className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                    <i className="fa-solid fa-chart-line text-lg"></i><span>Ringkasan Usaha</span>
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('products')}
-                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
-                                >
-                                    <i className="fa-solid fa-boxes-stacked text-lg"></i>
-                                    <span>Stok & Barang</span>
+                                <button onClick={() => setActiveTab('products')} className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                    <i className="fa-solid fa-boxes-stacked text-lg"></i><span>Stok & Barang</span>
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('reports')}
-                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
-                                >
-                                    <i className="fa-solid fa-file-invoice-dollar text-lg"></i>
-                                    <span>Laporan Penjualan</span>
+                                <button onClick={() => setActiveTab('reports')} className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                    <i className="fa-solid fa-file-invoice-dollar text-lg"></i><span>Laporan Penjualan</span>
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('settings')}
-                                    className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}
-                                >
-                                    <i className="fa-solid fa-gear text-lg"></i>
-                                    <span>Pengaturan</span>
+                                <button onClick={() => setActiveTab('settings')} className={`flex-1 md:flex-none flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-xs md:text-sm transition ${activeTab === 'settings' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'hover:bg-slate-800 hover:text-white'}`}>
+                                    <i className="fa-solid fa-gear text-lg"></i><span>Pengaturan</span>
                                 </button>
                             </nav>
                         </div>
@@ -510,8 +483,11 @@
                                         setSettings={async (newSettings) => {
                                             setPrinterSettings(newSettings);
                                             localStorage.setItem('cache_settings', JSON.stringify(newSettings));
-                                            await callApi('saveSettings', { settings: newSettings });
-                                            showToast('Pengaturan berhasil disimpan!');
+                                            
+                                            const res = await callApi('saveSettings', { settings: newSettings });
+                                            if (res) {
+                                                showToast('Pengaturan toko berhasil disimpan permanen!');
+                                            }
                                         }}
                                         btDevice={btDevice}
                                         btStatus={btStatus}
@@ -635,7 +611,6 @@
                                                 )}
                                             </div>
 
-                                            {/* Tombol + khusus tambah ke keranjang */}
                                             <button
                                                 onClick={() => addToCart(p)}
                                                 disabled={p.category !== 'Jasa Servis' && p.stock <= 0}
@@ -950,9 +925,9 @@
                         code: found.code,
                         name: found.name,
                         category: found.category || prev.category,
-                        buyPrice: 0,   // Otomatis diset 0 saat pilih dari master
-                        sellPrice: 0,  // Otomatis diset 0 saat pilih dari master
-                        stock: 0       // Otomatis diset 0 saat pilih dari master
+                        buyPrice: 0,
+                        sellPrice: 0,
+                        stock: 0
                     }));
                 }
             };
@@ -1313,13 +1288,37 @@
             const handleLogoUpload = (e) => {
                 const file = e.target.files && e.target.files[0];
                 if (file) {
-                    if (file.size > 1024 * 1024) {
-                        alert('Ukuran file logo terlalu besar. Gunakan gambar di bawah 1 MB.');
-                        return;
-                    }
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        handleChange('storeLogo', reader.result);
+                        const img = new Image();
+                        img.src = reader.result;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 250;
+                            const MAX_HEIGHT = 250;
+                            let width = img.width;
+                            let height = img.height;
+
+                            if (width > height) {
+                                if (width > MAX_WIDTH) {
+                                    height *= MAX_WIDTH / width;
+                                    width = MAX_WIDTH;
+                                }
+                            } else {
+                                if (height > MAX_HEIGHT) {
+                                    width *= MAX_HEIGHT / height;
+                                    height = MAX_HEIGHT;
+                                }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            // Kompresi kualitas gambar (mencegah payload terlalu besar)
+                            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                            handleChange('storeLogo', compressedDataUrl);
+                        };
                     };
                     reader.readAsDataURL(file);
                 }
@@ -1427,7 +1426,6 @@
                                 </div>
                                 <div className="flex-1 space-y-1">
                                     <label className="text-xs font-semibold text-slate-700 block">Logo Bengkel / Toko</label>
-                                    <p className="text-[11px] text-slate-400">Pilih gambar logo bengkel (PNG/JPG/SVG, max 1MB).</p>
                                     <div className="flex items-center space-x-2 pt-1">
                                         <label className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer transition flex items-center space-x-1.5 shadow-sm">
                                             <i className="fa-solid fa-upload"></i>
@@ -1468,7 +1466,7 @@
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-600 block mb-1">No. Telp / WhatsApp Bengkel</label>
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">No. Telp / WhatsApp</label>
                                     <input
                                         type="text"
                                         value={settings.storePhone || ''}
@@ -1511,16 +1509,16 @@
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
                         <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 relative">
                             <div className="text-center space-y-1 border-b pb-4 border-dashed border-slate-200">
-                                {settings.storeLogo ? (
+                                {settings && settings.storeLogo ? (
                                     <img src={settings.storeLogo} alt="Logo Bengkel" className="h-12 max-w-[120px] object-contain mx-auto mb-2 filter contrast-125 grayscale" />
                                 ) : (
                                     <div className="w-10 h-10 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-lg mb-2">
                                         <i className="fa-solid fa-wrench"></i>
                                     </div>
                                 )}
-                                <h2 className="font-bold text-lg text-slate-900 uppercase">{settings.storeName}</h2>
-                                <p className="text-xs text-slate-500">{settings.storeAddress}</p>
-                                <p className="text-[11px] text-slate-400">Telp: {settings.storePhone}</p>
+                                <h2 className="font-bold text-lg text-slate-900 uppercase">{settings ? settings.storeName : ''}</h2>
+                                <p className="text-xs text-slate-500">{settings ? settings.storeAddress : ''}</p>
+                                <p className="text-[11px] text-slate-400">Telp: {settings ? settings.storePhone : ''}</p>
                                 <p className="text-[11px] text-slate-400 font-mono mt-1">{transaction.id} | {new Date(transaction.date).toLocaleString('id-ID')}</p>
                             </div>
 
@@ -1590,15 +1588,15 @@
                     {/* Template Khusus Kertas Printer Thermal 58mm */}
                     <div className="thermal-receipt">
                         <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                            {settings.storeLogo && (
+                            {settings && settings.storeLogo && (
                                 <img
                                     src={settings.storeLogo}
                                     style={{ maxWidth: '35mm', maxHeight: '14mm', margin: '0 auto 4px auto', display: 'block', filter: 'grayscale(100%) contrast(200%)' }}
                                 />
                             )}
-                            <strong style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>{settings.storeName}</strong>
-                            <span style={{ fontSize: '8px', display: 'block' }}>{settings.storeAddress}</span>
-                            <span style={{ fontSize: '8px', display: 'block' }}>Telp: {settings.storePhone}</span>
+                            <strong style={{ fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>{settings ? settings.storeName : ''}</strong>
+                            <span style={{ fontSize: '8px', display: 'block' }}>{settings ? settings.storeAddress : ''}</span>
+                            <span style={{ fontSize: '8px', display: 'block' }}>Telp: {settings ? settings.storePhone : ''}</span>
                             <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
                         </div>
 
