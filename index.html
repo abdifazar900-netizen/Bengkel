@@ -478,43 +478,43 @@
                                 )}
 
                                 {activeTab === 'settings' && (
-    <PrinterSettingsView
-        settings={printerSettings}
-        onSettingsChange={(newSettings) => {
-            // HANYA simpan di layar saat sedang mengetik (TIDAK kirim ke Google Sheets)
-            setPrinterSettings(newSettings);
-        }}
-        onSaveSettings={async () => {
-            // HANYA dikirim ke Google Sheets saat tombol "Simpan Pengaturan" diklik
-            localStorage.setItem('cache_settings', JSON.stringify(printerSettings));
-            const res = await callApi('saveSettings', { settings: printerSettings });
-            if (res) {
-                showToast('Pengaturan toko berhasil disimpan permanen!');
-            }
-        }}
-        btDevice={btDevice}
-        btStatus={btStatus}
-        onScanBluetooth={handleScanBluetooth}
-        onTestPrint={() => {
-            const testTrx = {
-                id: 'TEST-001',
-                date: new Date().toISOString(),
-                customerName: 'Tes Printer',
-                vehicleInfo: 'Honda Vario 150',
-                plateNumber: 'B 1234 ABC',
-                items: [{ name: 'Oli MPX2 Tes Print', qty: 1, sellPrice: 55000 }],
-                subtotal: 55000,
-                discount: 0,
-                total: 55000,
-                cashPaid: 60000,
-                change: 5000
-            };
-            setLastTransaction(testTrx);
-            setShowReceiptModal(true);
-            triggerPrint(testTrx);
-        }}
-    />
-)}
+                                    <PrinterSettingsView
+                                        settings={printerSettings}
+                                        onSettingsChange={(newSettings) => {
+                                            setPrinterSettings(newSettings); // Simpan sementara di layar
+                                        }}
+                                        onSaveSettings={async () => {
+                                            localStorage.setItem('cache_settings', JSON.stringify(printerSettings));
+                                            const res = await callApi('saveSettings', { settings: printerSettings }); // Panggil API GS
+                                            if (res) {
+                                                showToast('Pengaturan toko berhasil disimpan permanen!');
+                                            }
+                                        }}
+                                        btDevice={btDevice}
+                                        btStatus={btStatus}
+                                        onScanBluetooth={handleScanBluetooth}
+                                        onTestPrint={() => {
+                                            const testTrx = {
+                                                id: 'TEST-001',
+                                                date: new Date().toISOString(),
+                                                customerName: 'Tes Printer',
+                                                vehicleInfo: 'Honda Vario 150',
+                                                plateNumber: 'B 1234 ABC',
+                                                items: [{ name: 'Oli MPX2 Tes Print', qty: 1, sellPrice: 55000 }],
+                                                subtotal: 55000,
+                                                discount: 0,
+                                                total: 55000,
+                                                cashPaid: 60000,
+                                                change: 5000
+                                            };
+                                            setLastTransaction(testTrx);
+                                            setShowReceiptModal(true);
+                                            triggerPrint(testTrx);
+                                        }}
+                                    />
+                                )}
+                            </>
+                        )}
                     </main>
 
                     {showReceiptModal && lastTransaction && (
@@ -1281,173 +1281,172 @@
         }
 
         function PrinterSettingsView({ settings, onSettingsChange, onSaveSettings, btDevice, btStatus, onScanBluetooth, onTestPrint }) {
-    const handleChange = (field, value) => {
-        const updated = { ...settings, [field]: value };
-        onSettingsChange(updated); // Hanya mengubah tampilan di layar, tidak mengirim ke server
-    };
-
-    const handleLogoUpload = (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const img = new Image();
-                img.src = reader.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 250;
-                    const MAX_HEIGHT = 250;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    } else {
-                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    handleChange('storeLogo', compressedDataUrl);
-                };
+            const handleChange = (field, value) => {
+                const updated = { ...settings, [field]: value };
+                onSettingsChange(updated); // Hanya mengubah tampilan di layar
             };
-            reader.readAsDataURL(file);
-        }
-    };
 
-    return (
-        <div className="space-y-6 max-w-3xl">
-            <div>
-                <h2 className="text-xl font-bold text-slate-800">Pengaturan</h2>
-                <p className="text-xs text-slate-500">Konfigurasi printer thermal 58mm dan identitas toko</p>
-            </div>
+            const handleLogoUpload = (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const img = new Image();
+                        img.src = reader.result;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 250;
+                            const MAX_HEIGHT = 250;
+                            let width = img.width;
+                            let height = img.height;
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
-                    <i className="fa-solid fa-print text-blue-600"></i>
-                    <span>Metode Cetak Printer Thermal</span>
-                </h3>
+                            if (width > height) {
+                                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                            } else {
+                                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                            handleChange('storeLogo', compressedDataUrl);
+                        };
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div onClick={() => handleChange('printMethod', 'system')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'system' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-xs text-slate-800">System Print</span>
-                            {settings.printMethod === 'system' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-tight">Mencetak via dialog cetak HP/Tablet OS (Mopria/AirPrint).</p>
+            return (
+                <div className="space-y-6 max-w-3xl">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-800">Pengaturan</h2>
+                        <p className="text-xs text-slate-500">Konfigurasi printer thermal 58mm dan identitas toko</p>
                     </div>
 
-                    <div onClick={() => handleChange('printMethod', 'bluetooth')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'bluetooth' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-xs text-slate-800">Web Bluetooth</span>
-                            {settings.printMethod === 'bluetooth' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
+                            <i className="fa-solid fa-print text-blue-600"></i>
+                            <span>Metode Cetak Printer Thermal</span>
+                        </h3>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div onClick={() => handleChange('printMethod', 'system')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'system' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">System Print</span>
+                                    {settings.printMethod === 'system' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Mencetak via dialog cetak HP/Tablet OS (Mopria/AirPrint).</p>
+                            </div>
+
+                            <div onClick={() => handleChange('printMethod', 'bluetooth')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'bluetooth' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">Web Bluetooth</span>
+                                    {settings.printMethod === 'bluetooth' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Cetak langsung ke Printer Thermal Bluetooth.</p>
+                            </div>
+
+                            <div onClick={() => handleChange('printMethod', 'rawbt')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'rawbt' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="font-bold text-xs text-slate-800">App RawBT</span>
+                                    {settings.printMethod === 'rawbt' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 leading-tight">Membuka aplikasi driver RawBT di Android.</p>
+                            </div>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-tight">Cetak langsung ke Printer Thermal Bluetooth.</p>
+
+                        {settings.printMethod === 'bluetooth' && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-700 block">Status Perangkat Bluetooth:</span>
+                                    <span className="text-xs text-blue-600 font-semibold">{btStatus}</span>
+                                </div>
+                                <button onClick={onScanBluetooth} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-2">
+                                    <i className="fa-solid fa-bluetooth"></i>
+                                    <span>Pindai & Sambungkan Bluetooth</span>
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                                <input type="checkbox" checked={settings.autoPrint} onChange={(e) => handleChange('autoPrint', e.target.checked)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
+                                <span>Cetak Otomatis Setelah Bayar</span>
+                            </label>
+
+                            <button onClick={onTestPrint} className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-1.5">
+                                <i className="fa-solid fa-vial"></i>
+                                <span>Tes Cetak Struk</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div onClick={() => handleChange('printMethod', 'rawbt')} className={`p-3.5 rounded-xl border-2 cursor-pointer transition ${settings.printMethod === 'rawbt' ? 'border-blue-600 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="font-bold text-xs text-slate-800">App RawBT</span>
-                            {settings.printMethod === 'rawbt' && <i className="fa-solid fa-circle-check text-blue-600"></i>}
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-tight">Membuka aplikasi driver RawBT di Android.</p>
-                    </div>
-                </div>
+                    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                        <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
+                            <i className="fa-solid fa-store text-blue-600"></i>
+                            <span>Identitas Bengkel Pada Struk Nota</span>
+                        </h3>
 
-                {settings.printMethod === 'bluetooth' && (
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div>
-                            <span className="text-xs font-bold text-slate-700 block">Status Perangkat Bluetooth:</span>
-                            <span className="text-xs text-blue-600 font-semibold">{btStatus}</span>
-                        </div>
-                        <button onClick={onScanBluetooth} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-2">
-                            <i className="fa-solid fa-bluetooth"></i>
-                            <span>Pindai & Sambungkan Bluetooth</span>
-                        </button>
-                    </div>
-                )}
+                        <div className="space-y-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                <div className="w-16 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                                    {settings.storeLogo ? (
+                                        <img src={settings.storeLogo} alt="Logo Bengkel" className="w-full h-full object-contain p-1" />
+                                    ) : (
+                                        <i className="fa-solid fa-wrench text-2xl text-slate-400"></i>
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700 block">Logo Bengkel / Toko</label>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <label className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer transition flex items-center space-x-1.5 shadow-sm">
+                                            <i className="fa-solid fa-upload"></i>
+                                            <span>{settings.storeLogo ? 'Ganti Logo' : 'Upload Logo'}</span>
+                                            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                                        </label>
+                                        {settings.storeLogo && (
+                                            <button type="button" onClick={() => handleChange('storeLogo', null)} className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-1.5 rounded-lg transition">
+                                                Hapus Logo
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
-                        <input type="checkbox" checked={settings.autoPrint} onChange={(e) => handleChange('autoPrint', e.target.checked)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
-                        <span>Cetak Otomatis Setelah Bayar</span>
-                    </label>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Nama Bengkel / Toko</label>
+                                <input type="text" value={settings.storeName || ''} onChange={(e) => handleChange('storeName', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
 
-                    <button onClick={onTestPrint} className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center space-x-1.5">
-                        <i className="fa-solid fa-vial"></i>
-                        <span>Tes Cetak Struk</span>
-                    </button>
-                </div>
-            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">Alamat Bengkel</label>
+                                    <input type="text" value={settings.storeAddress || ''} onChange={(e) => handleChange('storeAddress', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">No. Telp / WhatsApp</label>
+                                    <input type="text" value={settings.storePhone || ''} onChange={(e) => handleChange('storePhone', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                            </div>
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-                <h3 className="font-bold text-slate-800 text-sm border-b pb-2 border-slate-100 flex items-center space-x-2">
-                    <i className="fa-solid fa-store text-blue-600"></i>
-                    <span>Identitas Bengkel Pada Struk Nota</span>
-                </h3>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Catatan Footer Struk</label>
+                                <textarea rows="2" value={settings.receiptFooter || ''} onChange={(e) => handleChange('receiptFooter', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                            </div>
 
-                <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="w-16 h-16 rounded-xl border border-slate-300 bg-white flex items-center justify-center overflow-hidden flex-shrink-0 relative">
-                            {settings.storeLogo ? (
-                                <img src={settings.storeLogo} alt="Logo Bengkel" className="w-full h-full object-contain p-1" />
-                            ) : (
-                                <i className="fa-solid fa-wrench text-2xl text-slate-400"></i>
-                            )}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                            <label className="text-xs font-semibold text-slate-700 block">Logo Bengkel / Toko</label>
-                            <div className="flex items-center space-x-2 pt-1">
-                                <label className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg cursor-pointer transition flex items-center space-x-1.5 shadow-sm">
-                                    <i className="fa-solid fa-upload"></i>
-                                    <span>{settings.storeLogo ? 'Ganti Logo' : 'Upload Logo'}</span>
-                                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                                </label>
-                                {settings.storeLogo && (
-                                    <button type="button" onClick={() => handleChange('storeLogo', null)} className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-3 py-1.5 rounded-lg transition">
-                                        Hapus Logo
-                                    </button>
-                                )}
+                            <div className="pt-4 mt-2 border-t border-slate-100">
+                                <button type="button" onClick={onSaveSettings} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition flex items-center justify-center space-x-2">
+                                    <i className="fa-solid fa-floppy-disk"></i>
+                                    <span>Simpan Pengaturan Ke Database</span>
+                                </button>
                             </div>
                         </div>
                     </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1">Nama Bengkel / Toko</label>
-                        <input type="text" value={settings.storeName || ''} onChange={(e) => handleChange('storeName', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-semibold text-slate-600 block mb-1">Alamat Bengkel</label>
-                            <input type="text" value={settings.storeAddress || ''} onChange={(e) => handleChange('storeAddress', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-semibold text-slate-600 block mb-1">No. Telp / WhatsApp</label>
-                            <input type="text" value={settings.storePhone || ''} onChange={(e) => handleChange('storePhone', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-600 block mb-1">Catatan Footer Struk</label>
-                        <textarea rows="2" value={settings.receiptFooter || ''} onChange={(e) => handleChange('receiptFooter', e.target.value)} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-
-                    <div className="pt-2">
-                        {/* Tombol ini sekarang memanggil API Google Sheets hanya saat diklik */}
-                        <button type="button" onClick={onSaveSettings} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition flex items-center justify-center space-x-2">
-                            <i className="fa-solid fa-floppy-disk"></i>
-                            <span>Simpan Pengaturan</span>
-                        </button>
-                    </div>
                 </div>
-            </div>
-        </div>
-    );
-}
+            );
+        }
 
         function ReceiptModal({ transaction, settings, onTriggerPrint, onClose }) {
             return (
@@ -1507,7 +1506,6 @@
                                 </div>
                             </div>
 
-                            {/* Footer Catatan Tambahan UI Layar */}
                             {settings && settings.receiptFooter && (
                                 <div className="pt-3 border-t border-dashed border-slate-200 text-center text-[11px] text-slate-600 font-mono whitespace-pre-line leading-relaxed">
                                     {settings.receiptFooter}
@@ -1594,7 +1592,6 @@
                             <div style={{ borderBottom: '1px dashed #000', margin: '3px 0' }}></div>
                         </div>
 
-                        {/* Footer Kertas Struk Hasil Cetak */}
                         <div style={{ textAlign: 'center', fontSize: '8px', marginTop: '6px', whitespace: 'pre-line', wordBreak: 'break-word' }}>
                             {settings ? settings.receiptFooter : ''}
                         </div>
@@ -1605,16 +1602,6 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-    </script>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('Service Worker Registered!', reg))
-                    .catch(err => console.error('Service Worker Registration Failed!', err));
-            });
-        }
     </script>
 </body>
 </html>
