@@ -349,18 +349,26 @@
             return (
                 <div className="flex flex-col md:flex-row min-h-screen">
                     <aside className="no-print bg-slate-900 text-slate-300 w-full md:w-64 flex-shrink-0 flex flex-col justify-between p-4 md:min-h-screen">
-                        <div>
-                            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/30">
-                                        <i className="fa-solid fa-wrench"></i>
-                                    </div>
-                                    <div>
-                                        <h1 className="font-bold text-white text-base leading-tight">{printerSettings.storeName}</h1>
-                                        <span className="text-[11px] text-blue-400 font-medium">Cloud BengkelPOS</span>
-                                    </div>
-                                </div>
-                            </div>
+    <div>
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div className="flex items-center space-x-3">
+                {/* Logo Toko Dinamis */}
+                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/30 overflow-hidden flex-shrink-0">
+                    {printerSettings.storeLogo ? (
+                        <img src={printerSettings.storeLogo} alt="Logo" className="w-full h-full object-cover" />
+                    ) : (
+                        <i className="fa-solid fa-wrench"></i>
+                    )}
+                </div>
+                {/* Nama Toko Dinamis */}
+                <div className="overflow-hidden">
+                    <h1 className="font-bold text-white text-xs leading-tight truncate max-w-[130px]" title={printerSettings.storeName}>
+                        {printerSettings.storeName}
+                    </h1>
+                    <span className="text-[11px] text-blue-400 font-medium">Cloud BengkelPOS</span>
+                </div>
+            </div>
+        </div>
 
                             <div className="mt-3 p-2.5 bg-slate-800/80 rounded-xl text-xs flex items-center justify-between">
                                 <span className="flex items-center space-x-2">
